@@ -3,6 +3,9 @@ title: ""
 output:
   html_document:
     df_print: paged
+editor_options: 
+  markdown: 
+    wrap: sentence
 ---
 
 \
@@ -11,24 +14,48 @@ Universidad Torcuato Di Tella
 Licenciatura en Tecnología Digital\
 **Tecnología Digital VI: Inteligencia Artificial**
 
-# **rpart**
+# **Introduccion al problema**
 
-rpart es un paquete de R que nos permite crear árboles de decisión, ya sea de clasificación o de regresión. La principal diferencia con la implementación de los árboles de decisión de scikit-learn es que rpart puede manejar datos faltantes y atributos categóricos.
+Decidimos utilizar un dataset de cien mil canciones de spotify con el objetivo de predecir la popularidad de una cancion en funcion del resto de las variables.
+Los datos fueron extraidos desde la pagina de Kaggle.
+Entre las variables principales podemos mencionar:
 
-```{r}
-# install.packages("rpart") # Descomentar si no lo tienen ya instalado.
-library(rpart)
-```
+Variable a predecir - Popularity: Mide la popularidad de la cancion con un valor que va de 0 a 100
+
+Variables Predictoras - duration_ms: La duración de la pista en milisegundos.
+- explicit: Booleano que indica si la pista contiene contenido explícito.
+- danceability: Describe cuán adecuada es una pista para bailar (0.0 = menos bailable, 1.0 = más bailable).
+- energy: Representa la intensidad y actividad de una pista (0.0 = baja energía, 1.0 = alta energía).
+- key: La clave musical de la pista mapeada usando la notación estándar de Clase de Tono.
+- loudness: Volumen general de la pista en decibelios (dB).
+- mode: Indica la modalidad (mayor o menor) de la pista.
+- speechiness: Detecta la presencia de palabras habladas en la pista.
+- acousticness: Medida de confianza de si la pista es acústica (0.0 = no acústica, 1.0 = altamente acústica).
+- instrumentalness: Predice si una pista contiene voces (0.0 = contiene voces, 1.0 = instrumental).
+- liveness: Detecta la presencia de una audiencia en la grabación (0.0 = grabación de estudio, 1.0 = actuación en vivo).
+- valence: Mide la positividad musical transmitida por una pista (0.0 = negativa, 1.0 = positiva).
+- tempo: Tempo estimado de la pista en pulsaciones por minuto (BPM).
+- time_signature: Compás estimado de la pista (3 a 7).
+
+Aclaracion: la variable popularity esta medida a partir de las reproducciones de la cancion.
+A nivel de aplicacion, a un artista le seria util poder predecir la popularidad de una nueva cancion en funcion de las variables previamente mencionadas, ya que son variables que el artista puede controlar y modificar.
+
+
+FALTA JUSTIFICACION ARBOL DE DECISION
 
 ### **Datos**
 
-Carguemos los datos que vamos a usar. Para este ejemplo, vamos a usar la base de datos `titanic`, que ya se encuentra cargada en R. (Usamos una base de datos similar sobre el Titanic en la P01, pero mediante un archivo CSV aparte).
+Carguemos los datos que vamos a usar.
+Para este ejemplo, vamos a usar la base de datos `titanic`, que ya se encuentra cargada en R.
+(Usamos una base de datos similar sobre el Titanic en la P01, pero mediante un archivo CSV aparte).
 
 ```{r}
-# install.packages("titanic") # Descomentar si no lo tienen ya instalado.
-library(titanic)
-train <- titanic_train
-test <- titanic_test
+datos = read.csv("spotify_data.csv")
+```
+
+```{r}
+hist(datos$popularity)
+mean(datos$popularity)
 ```
 
 `<-` es el operador de asignación clásico en R, pero también se puede usar `=` como en Python.
@@ -41,17 +68,25 @@ str(train)
 
 Dentro de R, tenemos diferentes tipos de datos:
 
-- **Integer**: valor entero. La función `as.integer()` convierte valores en enteros.
+-   **Integer**: valor entero.
+    La función `as.integer()` convierte valores en enteros.
 
-- **Numeric**: numéro real. La función `as.numeric()` convierte valores en número reales.
+-   **Numeric**: numéro real.
+    La función `as.numeric()` convierte valores en número reales.
 
-- **Character**: valor nominal. La función `as.character()` convierte valores en caracteres. Todo elemento escrito entre comillas es considerado por R como un caracter.
+-   **Character**: valor nominal.
+    La función `as.character()` convierte valores en caracteres.
+    Todo elemento escrito entre comillas es considerado por R como un caracter.
 
-- **Factor**: valores categóricos con niveles. La función `as.factor()` convierte valores en categóricos con niveles. Se suele usar para variables de tipo `character` con pocos valores posibles, como sexo.
+-   **Factor**: valores categóricos con niveles.
+    La función `as.factor()` convierte valores en categóricos con niveles.
+    Se suele usar para variables de tipo `character` con pocos valores posibles, como sexo.
 
-- **Logical**: valores Booleanos. Acepta elementos como *TRUE*, *FALSE* y *NA*. La función `as.logical()` convierte valores en Booleanos.
+-   **Logical**: valores Booleanos.
+    Acepta elementos como *TRUE*, *FALSE* y *NA*.
+    La función `as.logical()` convierte valores en Booleanos.
 
-- **Complex**: números complejos.
+-   **Complex**: números complejos.
 
 Veamos los tipos de datos que tienen las columnas de nuestra base de datos y fijémonos si son correctos.
 
@@ -65,48 +100,60 @@ train$Sex <- as.factor(train$Sex)
 Por último, veamos si la base de datos contiene valores `NA`, de dos maneras distintas:
 
 ```{r}
-table(is.na(train))
+table(is.na(datos))
 ```
 
 ```{r}
-summary(train)
+summary(datos)
 ```
 
 ### **Árbol de decisión**
 
-Vamos a querer predecir, en base a los datos, si una persona *sobrevirá o no*. Como queremos un árbol de decisión de clasificación, usaremos la función `rpart()` del paquete rpart.
+Vamos a querer predecir, en base a los datos, si una persona *sobrevirá o no*.
+Como queremos un árbol de decisión de clasificación, usaremos la función `rpart()` del paquete rpart.
 
 `tree <- rpart(formula, data, method, parms, control, ...)`
 
 ¿En qué consiste cada uno de los parámetros de la función?
 
-- `formula`: permite especificar la respuesta y las variables predictoras de la forma habitual. Se suele establecer de la forma `respuesta ~ .` para incluir todas las posibles variables predictoras. En el caso de que sólo se quieran incluir algunas columnas del `data.frame` como predictoras la sintaxis pasa a ser: `respuesta ~ var_pred_selecc_1 + var_pred_selecc_2 + var_pred_selecc_3 + ...`.
+-   `formula`: permite especificar la respuesta y las variables predictoras de la forma habitual.
+    Se suele establecer de la forma `respuesta ~ .` para incluir todas las posibles variables predictoras.
+    En el caso de que sólo se quieran incluir algunas columnas del `data.frame` como predictoras la sintaxis pasa a ser: `respuesta ~ var_pred_selecc_1 + var_pred_selecc_2 + var_pred_selecc_3 + ...`.
 
-- `data`: `data.frame` (opcional; donde se evaluará la fórmula) con la muestra de entrenamiento.
+-   `data`: `data.frame` (opcional; donde se evaluará la fórmula) con la muestra de entrenamiento.
 
-- `method`: método empleado para realizar las particiones. Puede ser `"anova"` (regresión), `"class"` (clasificación), `"poisson"` (regresión de Poisson) o `"exp"` (supervivencia). Por defecto, se selecciona a partir de la variable `respuesta` en `formula`; por ejemplo, si `respuesta` es de tipo `factor`, `method = "class"`.
+-   `method`: método empleado para realizar las particiones.
+    Puede ser `"anova"` (regresión), `"class"` (clasificación), `"poisson"` (regresión de Poisson) o `"exp"` (supervivencia).
+    Por defecto, se selecciona a partir de la variable `respuesta` en `formula`; por ejemplo, si `respuesta` es de tipo `factor`, `method = "class"`.
 
-- `parms`: lista de parámetros opcionales para la partición en el caso de clasificación (o regresión de Poisson). Puede contener los componentes `prior` (vector de probabilidades previas; por defecto, las frecuencias observadas), `loss` (matriz de pérdidas; con ceros en la diagonal y por defecto 1 en el resto) y `split` (criterio de error; por defecto `"gini"` o alternativamente `"information"`).
+-   `parms`: lista de parámetros opcionales para la partición en el caso de clasificación (o regresión de Poisson).
+    Puede contener los componentes `prior` (vector de probabilidades previas; por defecto, las frecuencias observadas), `loss` (matriz de pérdidas; con ceros en la diagonal y por defecto 1 en el resto) y `split` (criterio de error; por defecto `"gini"` o alternativamente `"information"`).
 
-- `control`: lista con los hiperparámetros. Por defecto, se seleccionan mediante la función `rpart.control`, aunque también se pueden establecer en la llamada a la función principal. Sus principales parámetros son:
+-   `control`: lista con los hiperparámetros.
+    Por defecto, se seleccionan mediante la función `rpart.control`, aunque también se pueden establecer en la llamada a la función principal.
+    Sus principales parámetros son:
 
-   `rpart.control(minsplit = 20, minbucket = round(minsplit/3), cp = 0.01, xval = 10, maxdepth = 30, ...)`
+    `rpart.control(minsplit = 20, minbucket = round(minsplit/3), cp = 0.01, xval = 10, maxdepth = 30, ...)`
 
-   - `cp` es el parámetro de complejidad para la poda del árbol. Un valor de 1 se corresponde con un árbol sin divisiones, mientras que un valor de 0, con un árbol de profundidad máxima. Sólo se agregan divisiones cuando el costo de agregarlas es menor al valor de `cp`.
+    -   `cp` es el parámetro de complejidad para la poda del árbol.
+        Un valor de 1 se corresponde con un árbol sin divisiones, mientras que un valor de 0, con un árbol de profundidad máxima.
+        Sólo se agregan divisiones cuando el costo de agregarlas es menor al valor de `cp`.
 
-   - `maxdepth` es la máxima profundidad permitida para el árbol.
-   
-   - `minsplit` es el número mínimo de observaciones que debe haber en un nodo intermedio para poder dividirlo.
-   
-   - `minbucket` es el número mínimo de observaciones en una hoja.
-   
-   - `xval` es el número de grupos (*folds*) para validación cruzada.
+    -   `maxdepth` es la máxima profundidad permitida para el árbol.
+
+    -   `minsplit` es el número mínimo de observaciones que debe haber en un nodo intermedio para poder dividirlo.
+
+    -   `minbucket` es el número mínimo de observaciones en una hoja.
+
+    -   `xval` es el número de grupos (*folds*) para validación cruzada.
 
 ### **Ahora todo junto: árbol de decisión con datos**
 
 Armemos un árbol de decisión donde la variable *Survived* sea predicha en función de algunas de las otras columnas.
 
-Aclaración: columnas con el ID, el nombre de la persona o el ticket no suelen ser consideradas como variables predictoras. ¿Por qué? ¿Cuán probable es que un nuevo pasajero tenga el mismo ID o el mismo nombre o el mismo ticket que un pasajero pasado?
+Aclaración: columnas con el ID, el nombre de la persona o el ticket no suelen ser consideradas como variables predictoras.
+¿Por qué?
+¿Cuán probable es que un nuevo pasajero tenga el mismo ID o el mismo nombre o el mismo ticket que un pasajero pasado?
 
 ```{r}
 set.seed(22)
@@ -126,15 +173,16 @@ rpart.plot(tree)
 
 De forma similar al árbol analizado ayer, en el taller de la P03:
 
-- La gama del color de un nodo indica la clase predicha para las observaciones que quedan en él.
+-   La gama del color de un nodo indica la clase predicha para las observaciones que quedan en él.
 
-- La intensidad del color indica cuán puro es el nodo. A mayor cantidad de observaciones pertenecientes a la clase predicha, mayor es la intensidad.
+-   La intensidad del color indica cuán puro es el nodo.
+    A mayor cantidad de observaciones pertenecientes a la clase predicha, mayor es la intensidad.
 
 A diferencia del árbol analizado ayer, en el de acá:
 
-- Las reglas de decisión aparecen fuera, en vez de dentro, de los nodos.
+-   Las reglas de decisión aparecen fuera, en vez de dentro, de los nodos.
 
-- Dentro de cada nodo, se muestra qué proporción de casos pertenecen efectivamente a la clase predicha y la proporción del total de datos que han sido agrupados en ese nodo.
+-   Dentro de cada nodo, se muestra qué proporción de casos pertenecen efectivamente a la clase predicha y la proporción del total de datos que han sido agrupados en ese nodo.
 
 También podemos hacer predicciones con nuestro árbol:
 
@@ -160,6 +208,7 @@ data.frame("predicciones_con_na" = predictions,
            "predicciones_sin_na" = predictions_withoutNA)
 ```
 
-Podemos ver que, para algunas observaciones, la predicción es diferente (e.g., fila 19). Entonces, nos puede surgir la siguiente pregunta: ¿es mejor imputar los datos faltantes o dejar que el árbol por sí solo se encargue de ellos?
+Podemos ver que, para algunas observaciones, la predicción es diferente (e.g., fila 19).
+Entonces, nos puede surgir la siguiente pregunta: ¿es mejor imputar los datos faltantes o dejar que el árbol por sí solo se encargue de ellos?
 
 Esto y *mucho más* lo veremos en el TP1.
