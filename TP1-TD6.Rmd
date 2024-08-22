@@ -50,12 +50,30 @@ Para este ejemplo, vamos a usar la base de datos `titanic`, que ya se encuentra 
 (Usamos una base de datos similar sobre el Titanic en la P01, pero mediante un archivo CSV aparte).
 
 ```{r}
-datos = read.csv("spotify_data.csv")
-```
 
+library(readr)
+datos <- read_csv("cleaned_dataset.csv",col_select =-c(track_id,artists,album_name,track_name))
+View(datos)
+
+set.seed(12182018)
+
+if (nrow(datos) >= 50000) {
+  # Crear un vector de índices aleatorios
+  indices <- sample(1:nrow(datos), 50000)
+  
+  # Seleccionar las filas correspondientes a esos índices
+  muestra <- datos[indices, ]
+  
+  # Verificar el tamaño de la muestra
+  nrow(muestra)
+}
+
+```
 ```{r}
-hist(datos$popularity)
-mean(datos$popularity)
+
+# Apply summary to each column in the dataset
+sapply(muestra, summary)
+
 ```
 
 `<-` es el operador de asignación clásico en R, pero también se puede usar `=` como en Python.
@@ -63,7 +81,9 @@ mean(datos$popularity)
 Recordemos la estructura que tiene.
 
 ```{r}
-str(train)
+library(skimr)
+skim(muestra)
+
 ```
 
 Dentro de R, tenemos diferentes tipos de datos:
