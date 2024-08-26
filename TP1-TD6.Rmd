@@ -298,12 +298,109 @@ A diferencia del árbol analizado ayer, en el de acá:
 También podemos hacer predicciones con nuestro árbol:
 
 ```{r}
-test$Pclass <- as.factor(test$Pclass)
-test$Sex <- as.factor(test$Sex)
-predictions  <- predict(tree, newdata = test, type = "class")
+predictions  <- predict(arbol, newdata = test_set, type = "class")
+
+test_set$predicted_popularity <- predictions
+
+confusion_matrix <- table(test_set$popularity, test_set$predicted_popularity)
+
+confusion_matrix
+
 ```
 
 ¿Qué hubiese pasado si, en lugar de entrenar el modelo con valores faltantes, los hubiésemos completado con el *promedio*?
+
+Matriz de confusión
+
+```{r}
+
+```
+
+Accuracy
+
+```{r}
+
+```
+
+Precision y recall
+
+```{r}
+
+```
+
+F1 - score
+
+```{r}
+
+```
+
+AUC-ROC
+
+```{r}
+
+```
+
+Intepretacion de resultados:
+
+[ACA LA INTERPRETACIÓN]
+
+5. Optimización del modelo
+
+ -> Modificar valores de los hiperparámetros maxdepth, minsplit y minbucket, y evaluar el rendimiento de cada arból con el conjunto de validación. 
+ IMPORTANTE! SOLO USANDO AUC-ROC Y DEJAR FIJO CP Y XVAL EN 0
+ 
+ [ACA]
+ 
+ -> Realizar visualizaciones para ver como se relacionan los hiperparametros con la performance
+ 
+ [ACA]
+ 
+ -> Elegir el mejor árbol y medir el valor de AUC-ROC con el conjunto de testeo
+ 
+ [ACA]
+ 
+ -> Comparar el rendimiento entre el primer árbol y el árbol optimizado
+ 
+ [ACA]
+ 
+ 6. Intepretación de resultados
+ 
+ -> Presentar el árbol final, y detallar las diferencias entre el primero y el último
+ 
+ [ACA]
+ 
+ -> Identificar y discutir las variables más importantes según nuestro mejor árbol
+ 
+ [ACA]
+ 
+ 7. Análisis del impacto de los valores faltantes
+ 
+ -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras.     En el primero 20%, el segundo 50% y el tercero 75%
+ 
+ [ACA]
+ 
+ -> Para cada dataset creamos un nuevo árbol optimizado (elegir hiperparam. que maximicen)
+    Comparar el mejor árbol obtenido antes, con los 3 nuevos árboles
+    
+  [ACA]
+    
+  -> Analizar como cambia el rendimiento del modelo a medida que aumenta la cantidad de NAs     (Recomiendan fuertemente usar gráficos)
+  
+  [ACA]
+
+8. Conclusiones y discusión
+
+  -> Resumir los hallazgos principales del análisis.
+  
+  [ACA]
+  
+  -> Reflexionar sobre la efectividad del árbol de decisión para el problema planteado.
+  
+  [ACA]
+  
+  -> Sugerir posibles mejoras o direcciones futuras para el análisis.
+  
+  [ACA]
 
 ```{r}
 train_withoutNA <- train                                             
