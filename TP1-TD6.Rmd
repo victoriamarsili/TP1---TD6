@@ -298,21 +298,52 @@ A diferencia del árbol analizado ayer, en el de acá:
 También podemos hacer predicciones con nuestro árbol:
 
 ```{r}
-predictions  <- predict(arbol, newdata = test_set, type = "class")
+predictions_class  <- predict(arbol, newdata = test_set, type = "class")
 
-test_set$predicted_popularity <- predictions
+test_set$predicted_class_popularity <- predictions_class
 
-confusion_matrix <- table(test_set$popularity, test_set$predicted_popularity)
+predictions_prob  <- predict(arbol, newdata = test_set, type = "prob")
 
-confusion_matrix
-
+test_set$predicted_prob_popularity <- predictions_prob
 ```
 
-¿Qué hubiese pasado si, en lugar de entrenar el modelo con valores faltantes, los hubiésemos completado con el *promedio*?
 
 Matriz de confusión
 
 ```{r}
+
+library(MLmetrics)
+library(caret)
+
+confusion_matrix <- ConfusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
+
+confusion_matrix
+
+# If you want to get only the 'target_column' values that are 1, use:
+positive_len <- length(test_set$popularity[test_set$popularity == 1])
+
+negative_len <- length(test_set$popularity[test_set$popularity == 0])
+
+
+positive_len
+
+negative_len
+
+confusion_matrix[1][1] <- confusion_matrix[1][1] / negative_len
+
+confusion_matrix[1][1]
+
+confusion_matrix[2][1] <- confusion_matrix[2][1] / positive_len
+
+confusion_matrix[2][1]
+
+confusion_matrix[1][2] <- confusion_matrix[1][2] / negative_len
+
+confusion_matrix[1][2]
+
+confusion_matrix[2][2] <- confusion_matrix[2][2] / positive_len
+
+confusion_matrix
 
 ```
 
