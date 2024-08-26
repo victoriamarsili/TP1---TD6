@@ -1,10 +1,11 @@
 ---
-title: ""
+title: ''
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-editor_options: 
-  markdown: 
+editor_options:
+  markdown:
     wrap: sentence
 ---
 
@@ -16,13 +17,19 @@ Licenciatura en Tecnología Digital\
 
 # **Introduccion al problema**
 
-Decidimos utilizar un dataset de cien mil canciones de spotify con el objetivo de predecir la popularidad de una cancion en funcion del resto de las variables.
-Los datos fueron extraidos desde la pagina de Kaggle.
+Decidimos utilizar un dataset de aproximadamente cien mil canciones de spotify con el objetivo de predecir si una cancion es popular o no en funcion del resto de las variables. Los datos fueron extraidos desde la pagina de Kaggle.
+
 Entre las variables principales podemos mencionar:
 
-Variable a predecir - Popularity: Mide la popularidad de la cancion con un valor que va de 0 a 100
+####Variable a predecir
+- Popularity: Mide la popularidad de la cancion con un valor que va de 0 a 100
 
-Variables Predictoras - duration_ms: La duración de la pista en milisegundos.
+###Clasificacion Binaria
+Decidimos abordar la clasificacion binaria estableciendo un umbral para definir si una cancion es o no es popular en funcion de la prediccion de la variable *popularity*
+
+
+###Variables Predictoras
+- duration_ms: La duración de la pista en milisegundos.
 - explicit: Booleano que indica si la pista contiene contenido explícito.
 - danceability: Describe cuán adecuada es una pista para bailar (0.0 = menos bailable, 1.0 = más bailable).
 - energy: Representa la intensidad y actividad de una pista (0.0 = baja energía, 1.0 = alta energía).
@@ -43,19 +50,39 @@ A nivel de aplicacion, a un artista le seria util poder predecir la popularidad 
 
 FALTA JUSTIFICACION ARBOL DE DECISION
 
-### **Datos**
-
-Carguemos los datos que vamos a usar.
-Para este ejemplo, vamos a usar la base de datos `titanic`, que ya se encuentra cargada en R.
-(Usamos una base de datos similar sobre el Titanic en la P01, pero mediante un archivo CSV aparte).
+### **Preparacion de los Datos**
+Lo primero que hacemos es cargar el dataset de canciones y verificar si hay valores NA en el mismo.
 
 ```{r}
-
 library(readr)
-datos <- read_csv("cleaned_dataset.csv",col_select =-c(track_id,artists,album_name,track_name))
-View(datos)
+spotify_data  = read.csv("spotify_data.csv")
 
-set.seed(12182018)
+table(is.na(spotify_data))
+```
+Vemos que no hay ningun dato faltante.
+
+Una vez cargado, empieza la etapa de limpieza de los datos. Por ejemplo, lo primero que notamos fue que el dataset contenia muchas repeticiones de canciones por lo que eliminamos dichas observaciones repetidas, disminuyendo la cantidad total de canciones de 114000 a 73609. Posterior a eso, procedemos a eliminar las variables "track_id", "artists" "album_name" y "track_name" dado que no son relevantes para el trabajo practico.
+
+```{r}
+# Eliminar filas duplicadas basándote en la columna 'track_id'
+dataset_sin_repeticiones <- spotify_data[!duplicated(spotify_data$track_id), ]
+
+# Verificar el resultado
+dim(spotify_data)               # Dimensiones del dataset original
+dim(dataset_sin_repeticiones)  # Dimensiones del dataset sin duplicados
+```
+
+
+```{r}
+# cargamos el nuevo dataset eliminando las variables anteriormente mencionadas
+datos <- read_csv("cleaned_dataset.csv",col_select =-c(track_id,artists,album_name,track_name), show_col_types = FALSE)
+```
+
+Luego, hacemos un sampleo aleatorio de 50000 observaciones ya que, como dijimos previamente, nuestro dataset resultante tiene 73609 observaciones (el enunciado indica que el mismo no debe superar las 50000 observaciones)
+
+
+```{r}
+set.seed(33016244)
 
 if (nrow(datos) >= 50000) {
   # Crear un vector de índices aleatorios
@@ -67,8 +94,22 @@ if (nrow(datos) >= 50000) {
   # Verificar el tamaño de la muestra
   nrow(muestra)
 }
-
 ```
+Verificamos que, efectivamente, el dataset resultante tiene 50000 observaciones.
+
+
+Por ultimo, convertimos las observaciones de la variable "duration_ms" (que indica la duracion de una cancion expresada en milisegundos) de milisegundos a minutos. Tambien renombramos la variable como "duration_min"
+
+```{r}
+# Reemplazar duration_ms con la duración en minutos
+muestra$duration_ms <- muestra$duration_ms / 60000
+
+# Renombrar la variable a duration_min para reflejar el nuevo contenido
+names(muestra)[names(muestra) == "duration_ms"] <- "duration_min"
+```
+
+### **Estadistica Descriptiva**
+
 ```{r}
 
 # Apply summary to each column in the dataset
@@ -76,58 +117,108 @@ sapply(muestra, summary)
 
 ```
 
-`<-` es el operador de asignación clásico en R, pero también se puede usar `=` como en Python.
-
-Recordemos la estructura que tiene.
 
 ```{r}
-library(skimr)
-skim(muestra)
+hist(muestra$popularity, main = "Histograma de popularidad", xlab = "popularidad", ylab = "frecuencia")
+abline(v = mean(muestra$popularity), col = "orange", lwd = 9)
+```
+
+
+Vemos que la media de *popularity* es 34.30186, por lo que resulta razonable establecer el umbral de popularidad para la clasificacion binaria en un valor cercano a la media. Por otro lado, el desvio estandar es 'r sd(muestra$popularity)'. Creemos que mover el umbral un desvio a la derecha seria una medida extrema, que se alejaria bastante de la media. Por lo tanto, decidimos establecer el umbral de popularidad aproxmadamente 1/4 de desvio estandar a la derecha de la media, fijando el valor en 40.
+Teniendo eso en cuenta, vamos a realizar una transformación de la variable *popularity*, donde todas las observaciones mayores o iguales a 40 seran cambiadas por un 1 (la cancion es popular) y, en el caso contrario, con un 0 (la cancion no es popular).
+
+```{r}
+muestra$popularity <- ifelse(muestra$popularity >= 40, 1, 0)
+```
+
+
+##Division del dataset en train, validation y test
+
+```{r}
+n <- nrow(muestra)
+train_indices <- sample(1:n, size = 0.7 * n)
+remaining_indices <- setdiff(1:n, train_indices)
+val_indices <- sample(remaining_indices, size = 0.15 * n)
+test_indices <- setdiff(remaining_indices, val_indices)
+train_set <- muestra[train_indices, ]
+val_set <- muestra[val_indices, ]
+test_set <- muestra[test_indices, ]
 
 ```
 
-Dentro de R, tenemos diferentes tipos de datos:
-
--   **Integer**: valor entero.
-    La función `as.integer()` convierte valores en enteros.
-
--   **Numeric**: numéro real.
-    La función `as.numeric()` convierte valores en número reales.
-
--   **Character**: valor nominal.
-    La función `as.character()` convierte valores en caracteres.
-    Todo elemento escrito entre comillas es considerado por R como un caracter.
-
--   **Factor**: valores categóricos con niveles.
-    La función `as.factor()` convierte valores en categóricos con niveles.
-    Se suele usar para variables de tipo `character` con pocos valores posibles, como sexo.
-
--   **Logical**: valores Booleanos.
-    Acepta elementos como *TRUE*, *FALSE* y *NA*.
-    La función `as.logical()` convierte valores en Booleanos.
-
--   **Complex**: números complejos.
-
-Veamos los tipos de datos que tienen las columnas de nuestra base de datos y fijémonos si son correctos.
-
-Las columnas `PClass` y `Sex` deberían ser de tipo `factor`.
-
 ```{r}
-train$Pclass <- as.factor(train$Pclass)
-train$Sex <- as.factor(train$Sex)
+var(muestra$duration_min)
+summary(muestra$duration_min)
+
+boxplot(muestra$duration_min)
+```
+```{r}
+regresion_logistica = glm(formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature, data = train_set)
+
+summary(regresion_logistica)
 ```
 
-Por último, veamos si la base de datos contiene valores `NA`, de dos maneras distintas:
 
-```{r}
-table(is.na(datos))
-```
+REMINDER: OUTLIERS DE muestra$duration_min
 
-```{r}
-summary(datos)
-```
+
+REMINDER: CONVERSION DE LA VARIABLE track_genre
+
+
 
 ### **Árbol de decisión**
+
+```{r}
+library(rpart)
+
+arbol = rpart(formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature, data = train_set, method = "class")
+
+library(rpart.plot)
+rpart.plot(arbol, box.palette = "orange")
+
+print(rpart.control())
+```
+
+###Analisis de la estructura del arbol
+En el nodo raiz, podemos observar que la probabilidad de que una cancion sea popular (en esta instancia) es del 41% aproximadamente, lo cual tiene sentido ya que en esta instancia el modelo no conoce nada sobre la cancion por lo tanto esta probabilidad deberia coincidir con la media de popularity para el train_set.
+
+```{r}
+mean(train_set$popularity)
+```
+REMINDER: HABLAR SOBRE LA DIFERENCIA DE MEANS NUMERICA VS CATEGORICA
+
+En adicion a esto, el modelo toma a la variable *instrumentalness* como primer filtro, estableciendo un umbral de 0.013. En este caso, el 33% del conjunto de entrenamiento cumple con esta condicion, para las cuales el arbol predice que ninguna es popular. Con el 67% restante, ahora se pregunta si *speechiness* es mayor o igual a 0.56. Podemos observar que unicamente el 1% de los datos cumple con esto. El arbol realiza este proceso de filtrado con diferentes variables hasta que el conjunto de datos no supera el *min_split* que, como vimos, esta establecido en 20 obervaciones por defecto.
+
+REMINDER: PREGUNTAR COMO HACER ESTE ANALISIS DE MANERA IDONEA
+
+###Análisis de los hiperparámetros
+
+Los hiperparámetros más relevantes y su valor por defecto en rpart son: 
+- minsplit = 20 --> un nodo debe tener al menos 20 observaciones para ser considerado para una división, puede suceder como no.
+
+- minbucket = round(minsplit / 3) en este caso 20/ 3 = 6.66 ≈ 7--> por defecto, es aproximadamente un tercio de minsplit y limita el número mínimo de observaciones que debe tener un nodo terminal.
+
+- (complexity parameter) cp = 0.01--> controla la poda del árbol, en donde un valor de 0.01 significa que una división debe disminuir el error relativo en al menos un 1% para ser considerada. Un valor de 1 se corresponde con un árbol sin divisiones, mientras que un valor de 0, con un árbol de profundidad máxima. Sólo se agregan divisiones cuando el costo de agregarlas es menor al valor de `cp`.
+
+- maxdepth = 30 --> un valor de 30 permite que el árbol tenga hasta 30 niveles de profundidad, este hiperparámetro controla la profundiad del mismo. 
+
+- xval = 10 --> una significación de 10 implica que se realizarán 10 validaciones cruzadas.
+
+- maxcompete = 4 --> una estimación de 4 implica que retendrán las 4 mejores divisiones alternativas en cada nodo.
+
+- maxsurrogate = 5 --> define el número máximo de variables sustitutas a retener en cada nodo. Las variables sustitutas se utilizan para manejar datos faltantes. Un valor de 5 significa que el algoritmo retendrá hasta 5 variables sustitutas por nodo.
+
+- usesurrogate = 2 --> controla cómo se utilizan las variables sustitutas para manejar datos faltantes. Los valores posibles son:
+
+  0 = No se utilizan variables sustitutas.
+  1 = Se utilizan variables sustitutas solo para dividir los datos.
+  2 = Se utilizan variables sustitutas tanto para dividir los datos como para asignar observaciones a nodos         terminales.
+
+- surrogatestyle = 0 --> define el estilo de selección de variables sustitutas. Los valores posibles son:
+  
+  0 = Se seleccionan las variables sustitutas basándose en la reducción del error.
+  1 = Se seleccionan las variables sustitutas basándose en la similitud con la variable principal.
+
 
 Vamos a querer predecir, en base a los datos, si una persona *sobrevirá o no*.
 Como queremos un árbol de decisión de clasificación, usaremos la función `rpart()` del paquete rpart.
