@@ -64,12 +64,9 @@ Vemos que no hay ningun dato faltante.
 Una vez cargado, empieza la etapa de limpieza de los datos. Por ejemplo, lo primero que notamos fue que el dataset contenia muchas repeticiones de canciones por lo que eliminamos dichas observaciones repetidas, disminuyendo la cantidad total de canciones de 114000 a 73609. Posterior a eso, procedemos a eliminar las variables "track_id", "artists" "album_name" y "track_name" dado que no son relevantes para el trabajo practico.
 
 ```{r}
-# Eliminar filas duplicadas basándote en la columna 'track_id'
-dataset_sin_repeticiones <- spotify_data[!duplicated(spotify_data$track_id), ]
 
-# Verificar el resultado
-dim(spotify_data)               # Dimensiones del dataset original
-dim(dataset_sin_repeticiones)  # Dimensiones del dataset sin duplicados
+#CODIGO DE PYTHON
+
 ```
 
 
@@ -128,7 +125,14 @@ Vemos que la media de *popularity* es 34.30186, por lo que resulta razonable est
 Teniendo eso en cuenta, vamos a realizar una transformación de la variable *popularity*, donde todas las observaciones mayores o iguales a 40 seran cambiadas por un 1 (la cancion es popular) y, en el caso contrario, con un 0 (la cancion no es popular).
 
 ```{r}
+#Convertir la popularidad a una variable numerica binaria
 muestra$popularity <- ifelse(muestra$popularity >= 40, 1, 0)
+
+
+# Convertir la columna a factor
+muestra$popularity = as.factor(muestra$popularity)
+
+table(is.na(muestra))
 ```
 
 
@@ -144,18 +148,6 @@ train_set <- muestra[train_indices, ]
 val_set <- muestra[val_indices, ]
 test_set <- muestra[test_indices, ]
 
-```
-
-```{r}
-var(muestra$duration_min)
-summary(muestra$duration_min)
-
-boxplot(muestra$duration_min)
-```
-```{r}
-regresion_logistica = glm(formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature, data = train_set)
-
-summary(regresion_logistica)
 ```
 
 
@@ -193,7 +185,8 @@ REMINDER: PREGUNTAR COMO HACER ESTE ANALISIS DE MANERA IDONEA
 
 ###Análisis de los hiperparámetros
 
-Los hiperparámetros más relevantes y su valor por defecto en rpart son: 
+Los hiperparámetros más relevantes y su valor por defecto en rpart son:
+
 - minsplit = 20 --> un nodo debe tener al menos 20 observaciones para ser considerado para una división, puede suceder como no.
 
 - minbucket = round(minsplit / 3) en este caso 20/ 3 = 6.66 ≈ 7--> por defecto, es aproximadamente un tercio de minsplit y limita el número mínimo de observaciones que debe tener un nodo terminal.
@@ -220,82 +213,7 @@ Los hiperparámetros más relevantes y su valor por defecto en rpart son:
   1 = Se seleccionan las variables sustitutas basándose en la similitud con la variable principal.
 
 
-Vamos a querer predecir, en base a los datos, si una persona *sobrevirá o no*.
-Como queremos un árbol de decisión de clasificación, usaremos la función `rpart()` del paquete rpart.
-
-`tree <- rpart(formula, data, method, parms, control, ...)`
-
-¿En qué consiste cada uno de los parámetros de la función?
-
--   `formula`: permite especificar la respuesta y las variables predictoras de la forma habitual.
-    Se suele establecer de la forma `respuesta ~ .` para incluir todas las posibles variables predictoras.
-    En el caso de que sólo se quieran incluir algunas columnas del `data.frame` como predictoras la sintaxis pasa a ser: `respuesta ~ var_pred_selecc_1 + var_pred_selecc_2 + var_pred_selecc_3 + ...`.
-
--   `data`: `data.frame` (opcional; donde se evaluará la fórmula) con la muestra de entrenamiento.
-
--   `method`: método empleado para realizar las particiones.
-    Puede ser `"anova"` (regresión), `"class"` (clasificación), `"poisson"` (regresión de Poisson) o `"exp"` (supervivencia).
-    Por defecto, se selecciona a partir de la variable `respuesta` en `formula`; por ejemplo, si `respuesta` es de tipo `factor`, `method = "class"`.
-
--   `parms`: lista de parámetros opcionales para la partición en el caso de clasificación (o regresión de Poisson).
-    Puede contener los componentes `prior` (vector de probabilidades previas; por defecto, las frecuencias observadas), `loss` (matriz de pérdidas; con ceros en la diagonal y por defecto 1 en el resto) y `split` (criterio de error; por defecto `"gini"` o alternativamente `"information"`).
-
--   `control`: lista con los hiperparámetros.
-    Por defecto, se seleccionan mediante la función `rpart.control`, aunque también se pueden establecer en la llamada a la función principal.
-    Sus principales parámetros son:
-
-    `rpart.control(minsplit = 20, minbucket = round(minsplit/3), cp = 0.01, xval = 10, maxdepth = 30, ...)`
-
-    -   `cp` es el parámetro de complejidad para la poda del árbol.
-        Un valor de 1 se corresponde con un árbol sin divisiones, mientras que un valor de 0, con un árbol de profundidad máxima.
-        Sólo se agregan divisiones cuando el costo de agregarlas es menor al valor de `cp`.
-
-    -   `maxdepth` es la máxima profundidad permitida para el árbol.
-
-    -   `minsplit` es el número mínimo de observaciones que debe haber en un nodo intermedio para poder dividirlo.
-
-    -   `minbucket` es el número mínimo de observaciones en una hoja.
-
-    -   `xval` es el número de grupos (*folds*) para validación cruzada.
-
-### **Ahora todo junto: árbol de decisión con datos**
-
-Armemos un árbol de decisión donde la variable *Survived* sea predicha en función de algunas de las otras columnas.
-
-Aclaración: columnas con el ID, el nombre de la persona o el ticket no suelen ser consideradas como variables predictoras.
-¿Por qué?
-¿Cuán probable es que un nuevo pasajero tenga el mismo ID o el mismo nombre o el mismo ticket que un pasajero pasado?
-
-```{r}
-set.seed(22)
-tree <- rpart(formula = Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, 
-              data = train, 
-              method = "class")
-```
-
-En este caso, dejamos que el árbol trabaje por sí solo con los valores faltantes en edad.
-
-```{r}
-# install.packages("rpart.plot") # Descomentar si no lo tienen ya instalado.
-library(rpart.plot)
-
-rpart.plot(tree)
-```
-
-De forma similar al árbol analizado ayer, en el taller de la P03:
-
--   La gama del color de un nodo indica la clase predicha para las observaciones que quedan en él.
-
--   La intensidad del color indica cuán puro es el nodo.
-    A mayor cantidad de observaciones pertenecientes a la clase predicha, mayor es la intensidad.
-
-A diferencia del árbol analizado ayer, en el de acá:
-
--   Las reglas de decisión aparecen fuera, en vez de dentro, de los nodos.
-
--   Dentro de cada nodo, se muestra qué proporción de casos pertenecen efectivamente a la clase predicha y la proporción del total de datos que han sido agrupados en ese nodo.
-
-También podemos hacer predicciones con nuestro árbol:
+###Predicciones
 
 ```{r}
 predictions_class  <- predict(arbol, newdata = test_set, type = "class")
@@ -308,72 +226,104 @@ test_set$predicted_prob_popularity <- predictions_prob
 ```
 
 
+###Metricas de Performance
+
 Matriz de confusión
 
 ```{r}
-
-library(MLmetrics)
 library(caret)
+library(recipes)
 
-confusion_matrix <- ConfusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
+#confusion_matrix <- ConfusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
+confusion_matrix <- confusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
 
-confusion_matrix
 
-# If you want to get only the 'target_column' values that are 1, use:
+cm <- confusion_matrix$table
+
 positive_len <- length(test_set$popularity[test_set$popularity == 1])
-
 negative_len <- length(test_set$popularity[test_set$popularity == 0])
 
+cm[1, 1] <- cm[1, 1] / negative_len
+cm[1, 2] <- cm[1, 2] / positive_len
+cm[2, 1] <- cm[2, 1] / negative_len
+cm[2, 2] <- cm[2, 2] / positive_len
 
-positive_len
-
-negative_len
-
-confusion_matrix[1][1] <- confusion_matrix[1][1] / negative_len
-
-confusion_matrix[1][1]
-
-confusion_matrix[2][1] <- confusion_matrix[2][1] / positive_len
-
-confusion_matrix[2][1]
-
-confusion_matrix[1][2] <- confusion_matrix[1][2] / negative_len
-
-confusion_matrix[1][2]
-
-confusion_matrix[2][2] <- confusion_matrix[2][2] / positive_len
-
-confusion_matrix
-
+cm
 ```
+
 
 Accuracy
 
 ```{r}
+true_positive = cm[2, 2] * positive_len
+true_positive
 
+false_positive = cm[2, 1] * positive_len
+false_positive
+
+false_negative = cm[1, 2] * negative_len
+false_negative
+
+true_negative = cm[1, 1] * negative_len
+true_negative
+
+accuracy = (true_positive + true_negative)/(positive_len + negative_len)
+accuracy
 ```
 
 Precision y recall
 
 ```{r}
+precision = true_positive/(true_positive + false_positive)
+precision
 
+recall = true_positive/(true_positive + false_negative)
+recall
 ```
 
 F1 - score
 
 ```{r}
-
+f1_score = (2*precision*recall)/(precision + recall)
+f1_score
 ```
 
 AUC-ROC
 
 ```{r}
+library(pROC)
+vector_predicciones = as.numeric(test_set$predicted_class_popularity)
+curva_roc = roc(test_set$popularity, vector_predicciones)
 
+# Extraer el área bajo la curva (AUC)
+auc_value <- auc(curva_roc)
+
+# Imprimir solo el área bajo la curva (AUC)
+print(auc_value)
+
+plot(curva_roc, main = "Curva de AUC-ROC", col = "orange", lwd = 3)
 ```
 
-Intepretacion de resultados:
+###Interpretacion de las metricas de performance
 
-[ACA LA INTERPRETACIÓN]
+Matriz de confusion:
+
+  - TP: 0.3097139 -> Proporción de verdaderos positivos en relación con el total de verdaderos positivos.
+  - TN: 0.8340009 -> Proporción de verdaderos negativos en relación con el total de verdaderos negativos.
+  - FP: 0.1659991 -> Proporción de falsos positivos en relación con el total de verdaderos negativos.
+  - FN: 0.6902861 -> Proporción de falsos negativos en relación con el total de verdaderos positivos.
+
+Accuracy: El modelo tiene una tasa de precisión general del 62.39%, lo que indica un rendimiento moderado.
+
+Precision: Un valor de 0.555158 sugiere que el 55.52% de las veces que el modelo predice la clase positiva, esta predicción es correcta.
+
+Recall: Un valor de 0.3097139 indica que el modelo ha identificado correctamente el 30.97% de los verdaderos positivos. Esto sugiere que el modelo es menos eficaz en identificar la clase positiva.
+
+F1-Score: Un valor de 0.3976084 indica el equilibrio entre la precisión y el recall. Es una medida general del rendimiento del modelo en términos de precisión y exhaustividad.
+
+area bajo la curva de AUC-ROC: Un AUC de 0.5719 indica que el modelo tiene una capacidad discriminativa ligeramente mejor que la aleatoria, pero no es excepcional. Esto sugiere que el modelo tiene un rendimiento moderado en la discriminación entre clases.
+
+
 
 5. Optimización del modelo
 
