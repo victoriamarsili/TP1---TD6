@@ -250,7 +250,18 @@ cm[2, 2] <- cm[2, 2] / positive_len
 
 cm
 ```
-
+```{r}
+library(pheatmap)
+# Crear el mapa de calor
+pheatmap(cm,
+         display_numbers = TRUE,
+         color = colorRampPalette(c("coral", "gold"))(50),
+         main = "Confusion Matrix",
+         number_format = "%.2f",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         legend = TRUE)
+```
 
 Accuracy
 
@@ -330,12 +341,112 @@ area bajo la curva de AUC-ROC: Un AUC de 0.5719 indica que el modelo tiene una c
  -> Modificar valores de los hiperparámetros maxdepth, minsplit y minbucket, y evaluar el rendimiento de cada arból con el conjunto de validación. 
  IMPORTANTE! SOLO USANDO AUC-ROC Y DEJAR FIJO CP Y XVAL EN 0
  
- [ACA]
+```{r}
+library(rBayesianOptimization)
+library(rpart)
+library(pROC)
+library(ggplot2)
+
+# Función para evaluar el rendimiento del árbol
+evaluar_arbol <- function(maxdepth, minsplit, minbucket) {
+  modelo <- rpart(
+    formula = train_set$popularity ~ ., 
+    data = train_set, 
+    method = "class", 
+    control = rpart.control(
+      maxdepth = as.integer(maxdepth), 
+      minsplit = as.integer(minsplit), 
+      minbucket = as.integer(minbucket),
+      cp = 0,
+      xval = 0
+    )
+  )
+  predicciones <- predict(modelo, val_set, type = "prob")[,2]
+  roc_curve <- roc(val_set$popularity, predicciones)
+  auc_score <- auc(roc_curve)
+  
+  # Devolver una lista con el campo Score
+  list(Score = auc_score)
+}
+
+# Definir los límites de los hiperparámetros
+limites <- list(
+  maxdepth = c(7L, 20L), 
+  minsplit = c(5L, 30L), 
+  minbucket = c(1L, L)
+)
+
+# Ejecutar la optimización bayesiana
+result <- BayesianOptimization(
+  FUN = evaluar_arbol,
+  bounds = limites,
+  init_points = 5,
+  n_iter = 95
+)
+
+# Extraer el historial de resultados
+result_data <- result$History
+
+ggplot(result_data, aes(x = Round, y = Value)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  geom_hline(yintercept = 0.8844099, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
+  labs(title = "Progreso del valor del area bajo la curva de AUC-ROC con Optimización Bayesiana",
+       x = "Iteración",
+       y = "Área Bajo la Curva de AUC-ROC") +
+  theme_minimal()
+```
+ En este grafico, podemos observar que realizar 100 iteraciones no es necesario ya que aproximadamente a las 25 iteraciones se puede observar una convergencia al maximo valor del area bajo la curva de AUC-ROC que es ≈ 0.8844. Este trade-off entre tiempo de ejecucion y performance del modelo es clave a la hora de establecer el valor de *n_iter*.
  
- -> Realizar visualizaciones para ver como se relacionan los hiperparametros con la performance
  
- [ACA]
  
+###Visualizaciones relacion performance - hiperparametro
+ 
+```{r}
+library(plotly)
+
+# Crear gráfico 3D
+fig <- plot_ly(
+  data = result_data,
+  x = ~maxdepth,
+  y = ~minsplit,
+  z = ~Value,
+  type = 'scatter3d',
+  mode = 'markers',
+  marker = list(size = 5, color = ~Value, colorscale = 'Viridis', showscale = TRUE)
+)
+
+# Configurar el título y los ejes
+fig <- fig %>%
+  layout(
+    title = 'Progreso del AUC en función de maxdepth y minsplit',
+    scene = list(
+      xaxis = list(title = 'maxdepth'),
+      yaxis = list(title = 'minsplit'),
+      zaxis = list(title = 'Área Bajo la Curva (AUC)')
+    )
+  )
+
+# Mostrar el gráfico
+fig
+```
+ 
+```{r}
+#GRAFICO 2: performance en funcion de minsplit
+
+
+# Extraer el historial de resultados
+ggplot(result_data, aes(x = minsplit, y = Value)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  geom_hline(yintercept = 0.8844099, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
+  labs(title = "performance en funcion de minsplit con n = 100",
+       x = "minsplit",
+       y = "Área Bajo la Curva de AUC-ROC") +
+  theme_minimal()
+```
+
+
  -> Elegir el mejor árbol y medir el valor de AUC-ROC con el conjunto de testeo
  
  [ACA]
@@ -365,7 +476,7 @@ area bajo la curva de AUC-ROC: Un AUC de 0.5719 indica que el modelo tiene una c
     
   [ACA]
     
-  -> Analizar como cambia el rendimiento del modelo a medida que aumenta la cantidad de NAs     (Recomiendan fuertemente usar gráficos)
+  -> Analizar como cambia el rendimiento del modelo a medida que aumenta la cantidad de NAs (Recomiendan fuertemente usar gráficos)
   
   [ACA]
 
