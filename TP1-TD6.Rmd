@@ -134,7 +134,7 @@ Teniendo eso en cuenta, vamos a realizar una transformación de la variable *pop
 
 ```{r}
 #Convertir la popularidad a una variable numerica binaria
-muestra$popularity <- ifelse(muestra$popularity >= 40, 1, 0)
+muestra$popularity <- ifelse(muestra$popularity >= 34, 1, 0)
 
 
 # Convertir la columna a factor
@@ -425,7 +425,7 @@ evaluar_arbol <- function(maxdepth, minsplit, minbucket, train_set, val_set) {
     )
   )
   predicciones <- predict(modelo, val_set, type = "prob")[,2]
-  roc_curve <- roc(val_set$popularity, predicciones)
+  roc_curve <- roc(test_set$popularity, predicciones)
   auc_score <- auc(roc_curve)
   
   # Devolver una lista con el campo Score
@@ -517,9 +517,9 @@ mejor_arbol <- rpart(
   data = train_set, 
   method = "class", 
   control = rpart.control(
-    maxdepth = 11, 
-    minsplit = 30, 
-    minbucket = 3,
+    maxdepth = 15, 
+    minsplit = 27, 
+    minbucket = 2,
     cp = 0,
     xval = 0
   )
@@ -551,10 +551,6 @@ lines(curva_optimizada, col = "purple", lwd = 3)
 
 # Añadir una leyenda para diferenciar las curvas
 legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("orange", "purple"), lwd = 3)
-
-
-cm_optimizada = generar_matriz_confusion(test_set$popularity, test_set$predicciones_optimas)
-graficar_matriz_confusion(cm_optimizada)
 ```
 
 
@@ -563,7 +559,8 @@ graficar_matriz_confusion(cm_optimizada)
 
 graficar_matriz_confusion(cm)
 
-cm_optimizada = generar_matriz_confusion()
+cm_optimizada = generar_matriz_confusion(test_set$popularity, test_set$predicciones_optimas)
+graficar_matriz_confusion(cm_optimizada)
 ```
 
 
