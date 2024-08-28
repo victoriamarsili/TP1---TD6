@@ -132,7 +132,8 @@ muestra$popularity <- ifelse(muestra$popularity >= 40, 1, 0)
 # Convertir la columna a factor
 muestra$popularity = as.factor(muestra$popularity)
 
-table(is.na(muestra))
+
+muestra$explicit <- ifelse(muestra$explicit == TRUE, 1, 0)
 ```
 
 
@@ -156,14 +157,12 @@ REMINDER: OUTLIERS DE muestra$duration_min
 
 REMINDER: CONVERSION DE LA VARIABLE track_genre
 
-
-
 ### **Árbol de decisión**
 
 ```{r}
 library(rpart)
 
-arbol = rpart(formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature, data = train_set, method = "class")
+arbol = rpart(formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature , data = train_set, method = "class")
 
 library(rpart.plot)
 rpart.plot(arbol, box.palette = "orange")
@@ -173,11 +172,6 @@ print(rpart.control())
 
 ###Analisis de la estructura del arbol
 En el nodo raiz, podemos observar que la probabilidad de que una cancion sea popular (en esta instancia) es del 41% aproximadamente, lo cual tiene sentido ya que en esta instancia el modelo no conoce nada sobre la cancion por lo tanto esta probabilidad deberia coincidir con la media de popularity para el train_set.
-
-```{r}
-mean(train_set$popularity)
-```
-REMINDER: HABLAR SOBRE LA DIFERENCIA DE MEANS NUMERICA VS CATEGORICA
 
 En adicion a esto, el modelo toma a la variable *instrumentalness* como primer filtro, estableciendo un umbral de 0.013. En este caso, el 33% del conjunto de entrenamiento cumple con esta condicion, para las cuales el arbol predice que ninguna es popular. Con el 67% restante, ahora se pregunta si *speechiness* es mayor o igual a 0.56. Podemos observar que unicamente el 1% de los datos cumple con esto. El arbol realiza este proceso de filtrado con diferentes variables hasta que el conjunto de datos no supera el *min_split* que, como vimos, esta establecido en 20 obervaciones por defecto.
 
@@ -336,7 +330,7 @@ area bajo la curva de AUC-ROC: Un AUC de 0.5719 indica que el modelo tiene una c
 
 
 
-5. Optimización del modelo
+###5. Optimización del modelo
 
  -> Modificar valores de los hiperparámetros maxdepth, minsplit y minbucket, y evaluar el rendimiento de cada arból con el conjunto de validación. 
  IMPORTANTE! SOLO USANDO AUC-ROC Y DEJAR FIJO CP Y XVAL EN 0
@@ -347,8 +341,8 @@ library(rpart)
 library(pROC)
 library(ggplot2)
 
-# Función para evaluar el rendimiento del árbol
-evaluar_arbol <- function(maxdepth, minsplit, minbucket) {
+# Función para evaluar el rendimiento del árbol, con dataset como parámetro
+evaluar_arbol <- function(maxdepth, minsplit, minbucket, train_set, val_set) {
   modelo <- rpart(
     formula = train_set$popularity ~ ., 
     data = train_set, 
@@ -373,21 +367,21 @@ evaluar_arbol <- function(maxdepth, minsplit, minbucket) {
 limites <- list(
   maxdepth = c(7L, 20L), 
   minsplit = c(5L, 30L), 
-  minbucket = c(1L, L)
+  minbucket = c(1L, 3L)
 )
 
 # Ejecutar la optimización bayesiana
 result <- BayesianOptimization(
-  FUN = evaluar_arbol,
+  FUN = function(maxdepth, minsplit, minbucket) {
+    evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set)
+  },
   bounds = limites,
   init_points = 5,
-  n_iter = 95
+  n_iter = 10,
 )
 
-# Extraer el historial de resultados
-result_data <- result$History
-
-ggplot(result_data, aes(x = Round, y = Value)) +
+graficar_performance = function(resultado){
+  ggplot(resultado, aes(x = Round, y = Value)) +
   geom_line(color = "blue") +
   geom_point(color = "red") +
   geom_hline(yintercept = 0.8844099, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
@@ -395,6 +389,12 @@ ggplot(result_data, aes(x = Round, y = Value)) +
        x = "Iteración",
        y = "Área Bajo la Curva de AUC-ROC") +
   theme_minimal()
+}
+
+# Extraer el historial de resultados
+result_data <- result$History
+
+graficar_performance(result_data)
 ```
  En este grafico, podemos observar que realizar 100 iteraciones no es necesario ya que aproximadamente a las 25 iteraciones se puede observar una convergencia al maximo valor del area bajo la curva de AUC-ROC que es ≈ 0.8844. Este trade-off entre tiempo de ejecucion y performance del modelo es clave a la hora de establecer el valor de *n_iter*.
  
@@ -431,20 +431,6 @@ fig <- fig %>%
 fig
 ```
  
-```{r}
-#GRAFICO 2: performance en funcion de minsplit
-
-
-# Extraer el historial de resultados
-ggplot(result_data, aes(x = minsplit, y = Value)) +
-  geom_line(color = "blue") +
-  geom_point(color = "red") +
-  geom_hline(yintercept = 0.8844099, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
-  labs(title = "performance en funcion de minsplit con n = 100",
-       x = "minsplit",
-       y = "Área Bajo la Curva de AUC-ROC") +
-  theme_minimal()
-```
 
 
  -> Elegir el mejor árbol y medir el valor de AUC-ROC con el conjunto de testeo
@@ -455,7 +441,7 @@ ggplot(result_data, aes(x = minsplit, y = Value)) +
  
  [ACA]
  
- 6. Intepretación de resultados
+ 6. Interpretación de resultados
  
  -> Presentar el árbol final, y detallar las diferencias entre el primero y el último
  
@@ -469,12 +455,88 @@ ggplot(result_data, aes(x = minsplit, y = Value)) +
  
  -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras.     En el primero 20%, el segundo 50% y el tercero 75%
  
- [ACA]
+```{r}
+# Función para reemplazar un porcentaje de valores al azar con NA
+reemplazar_con_na <- function(dataset, porcentaje) {
+  datos_na <- dataset
+  for (columna in names(datos_na)) {
+    if (is.numeric(datos_na[[columna]]))  {
+      cantidad_na <- round(porcentaje * nrow(datos_na))
+      indices <- sample(1:nrow(datos_na), cantidad_na)
+      datos_na[indices, columna] <- NA
+    }
+  }
+  return(datos_na)
+}
+
+# Creación de los tres sets
+train_20_na <- reemplazar_con_na(train_set, 0.20)
+val_20_na <- reemplazar_con_na(val_set, 0.20)
+test_20_na <- reemplazar_con_na(test_set, 0.20)
+
+train_50_na <- reemplazar_con_na(train_set, 0.50)
+val_50_na <- reemplazar_con_na(val_set, 0.50)
+test_50_na <- reemplazar_con_na(test_set, 0.50)
+
+train_75_na <- reemplazar_con_na(train_set, 0.75)
+val_75_na <- reemplazar_con_na(val_set, 0.75)
+test_75_na <- reemplazar_con_na(test_set, 0.75)
+```
  
  -> Para cada dataset creamos un nuevo árbol optimizado (elegir hiperparam. que maximicen)
     Comparar el mejor árbol obtenido antes, con los 3 nuevos árboles
     
-  [ACA]
+
+```{r}
+
+# Ejecutar la optimización bayesiana
+result_20_NA <- BayesianOptimization(
+  FUN = function(maxdepth, minsplit, minbucket) {
+    evaluar_arbol(maxdepth, minsplit, minbucket, train_20_na, val_20_na)
+  },
+  bounds = limites,
+  init_points = 5,
+  n_iter = 10,
+)
+result_data_20_NA <- result_20_NA$History
+
+graficar_performance(result_data_20_NA)
+
+```
+
+```{r}
+# Ejecutar la optimización bayesiana
+result_50_NA <- BayesianOptimization(
+  FUN = function(maxdepth, minsplit, minbucket) {
+    evaluar_arbol(maxdepth, minsplit, minbucket, train_50_na, val_50_na)
+  },
+  bounds = limites,
+  init_points = 5,
+  n_iter = 10,
+)
+
+result_data_50_NA <- result_50_NA$History
+
+graficar_performance(result_data_50_NA)
+
+```
+```{r}
+# Ejecutar la optimización bayesiana
+result_75_NA <- BayesianOptimization(
+  FUN = function(maxdepth, minsplit, minbucket) {
+    evaluar_arbol(maxdepth, minsplit, minbucket, train_75_na, val_75_na)
+  },
+  bounds = limites,
+  init_points = 5,
+  n_iter = 10,
+)
+
+result_data_75_NA <- result_75_NA$History
+
+graficar_performance(result_data_75_NA)
+
+```
+
     
   -> Analizar como cambia el rendimiento del modelo a medida que aumenta la cantidad de NAs (Recomiendan fuertemente usar gráficos)
   
@@ -494,21 +556,4 @@ ggplot(result_data, aes(x = minsplit, y = Value)) +
   
   [ACA]
 
-```{r}
-train_withoutNA <- train                                             
-train_withoutNA$Age[is.na(train_withoutNA$Age)] <- mean(train_withoutNA$Age, na.rm = TRUE)
 
-tree_withoutNA <- rpart(formula = Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked,
-                        data = train_withoutNA,
-                        method = "class")
-
-predictions_withoutNA <- predict(tree_withoutNA, newdata = test, type = "class")
-
-data.frame("predicciones_con_na" = predictions,
-           "predicciones_sin_na" = predictions_withoutNA)
-```
-
-Podemos ver que, para algunas observaciones, la predicción es diferente (e.g., fila 19).
-Entonces, nos puede surgir la siguiente pregunta: ¿es mejor imputar los datos faltantes o dejar que el árbol por sí solo se encargue de ellos?
-
-Esto y *mucho más* lo veremos en el TP1.
