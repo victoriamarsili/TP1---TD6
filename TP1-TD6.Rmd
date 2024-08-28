@@ -56,6 +56,8 @@ Lo primero que hacemos es cargar el dataset de canciones y verificar si hay valo
 ```{r}
 library(readr)
 spotify_data  = read.csv("spotify_data.csv")
+spotify_data <- subset(spotify_data, select = -track_genre)
+spotify_data <- subset(spotify_data, select = -X)
 
 table(is.na(spotify_data))
 ```
@@ -73,6 +75,11 @@ Una vez cargado, empieza la etapa de limpieza de los datos. Por ejemplo, lo prim
 ```{r}
 # cargamos el nuevo dataset eliminando las variables anteriormente mencionadas
 datos <- read_csv("cleaned_dataset.csv",col_select =-c(track_id,artists,album_name,track_name), show_col_types = FALSE)
+datos <- subset(datos, select = -track_genre)
+
+# Eliminar la primera columna usando subset
+datos <- subset(datos, select = -1)
+
 ```
 
 Luego, hacemos un sampleo aleatorio de 50000 observaciones ya que, como dijimos previamente, nuestro dataset resultante tiene 73609 observaciones (el enunciado indica que el mismo no debe superar las 50000 observaciones)
@@ -149,6 +156,7 @@ test_indices <- setdiff(remaining_indices, val_indices)
 train_set <- muestra[train_indices, ]
 val_set <- muestra[val_indices, ]
 test_set <- muestra[test_indices, ]
+test_set_arbol = muestra[test_indices, ]
 ```
 
 
@@ -162,13 +170,14 @@ REMINDER: CONVERSION DE LA VARIABLE track_genre
 ```{r}
 library(rpart)
 
-arbol = rpart(formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature , data = train_set, method = "class")
+arbol = rpart(formula = popularity ~ ., data = train_set, method = "class")
 
 library(rpart.plot)
 rpart.plot(arbol, box.palette = "orange")
 
 print(rpart.control())
 ```
+
 
 ###Analisis de la estructura del arbol
 En el nodo raiz, podemos observar que la probabilidad de que una cancion sea popular (en esta instancia) es del 41% aproximadamente, lo cual tiene sentido ya que en esta instancia el modelo no conoce nada sobre la cancion por lo tanto esta probabilidad deberia coincidir con la media de popularity para el train_set.
@@ -210,13 +219,23 @@ Los hiperparámetros más relevantes y su valor por defecto en rpart son:
 ###Predicciones
 
 ```{r}
+
 predictions_class  <- predict(arbol, newdata = test_set, type = "class")
 
 test_set$predicted_class_popularity <- predictions_class
 
-predictions_prob  <- predict(arbol, newdata = test_set, type = "prob")
+agregar_predicciones = function(dataset, nombre_columna_predicciones, arbol) {
+  predictions_class  <- predict(arbol, newdata = dataset, type = "class")
 
-test_set$predicted_prob_popularity <- predictions_prob
+  dataset[[nombre_columna_predicciones]] <- predictions_class
+  
+  message("Columna ", nombre_columna_predicciones, " agregada exitosamente al dataset.")
+  #predictions_prob  <- predict(arbol, newdata = test_set, type = "prob")
+  
+  #test_set$predicted_prob_popularity <- predictions_prob
+}
+
+agregar_predicciones(test_set, "predicted_class_popularity", arbol)
 ```
 
 
@@ -228,24 +247,28 @@ Matriz de confusión
 library(caret)
 library(recipes)
 
+positive_len <- length(test_set$predicted_class_popularity[test_set$predicted_class_popularity == 1])
+negative_len <- length(test_set$predicted_class_popularity[test_set$predicted_class_popularity == 0])
 
-generar_matriz_confusion
+generar_matriz_confusion = function(clase_real, clase_predicha){
+  #Requiere: el formato de los parametros sea "dataset$clase"
+  
+  confusion_matrix = confusionMatrix(clase_predicha, clase_real)
+  
+  cm = confusion_matrix$table
+  
+  positive_len <- length(clase_real[clase_real == 1])
+  negative_len <- length(clase_real[clase_real == 0])
+  
+  cm[1, 1] <- cm[1, 1] / negative_len
+  cm[1, 2] <- cm[1, 2] / positive_len
+  cm[2, 1] <- cm[2, 1] / negative_len
+  cm[2, 2] <- cm[2, 2] / positive_len
+  
+  return(cm)
+}
 
-#confusion_matrix <- ConfusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
-confusion_matrix <- confusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
-
-
-cm <- confusion_matrix$table
-
-positive_len <- length(test_set$popularity[test_set$popularity == 1])
-negative_len <- length(test_set$popularity[test_set$popularity == 0])
-
-cm[1, 1] <- cm[1, 1] / negative_len
-cm[1, 2] <- cm[1, 2] / positive_len
-cm[2, 1] <- cm[2, 1] / negative_len
-cm[2, 2] <- cm[2, 2] / positive_len
-
-cm
+cm = generar_matriz_confusion(test_set$popularity, test_set$predicted_class_popularity)
 ```
 
 
@@ -253,68 +276,106 @@ cm
 ```{r}
 #Graficamos la matriz de confusion
 library(pheatmap)
-# Crear el mapa de calor
-pheatmap(cm,
-         display_numbers = TRUE,
-         color = colorRampPalette(c("coral", "gold"))(50),
-         main = "Confusion Matrix",
-         number_format = "%.2f",
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         legend = TRUE,
-         fontsize_number = 15)
+
+graficar_matriz_confusion = function(tabla_matriz_confusion) {
+  # Crear el mapa de calor
+  pheatmap(tabla_matriz_confusion,
+           display_numbers = TRUE,
+           color = colorRampPalette(c("coral", "gold"))(50),
+           main = "Confusion Matrix",
+           number_format = "%.2f",
+           cluster_rows = FALSE,
+           cluster_cols = FALSE,
+           legend = TRUE,
+           fontsize_number = 15)
+}
+
+graficar_matriz_confusion(cm)
 ```
 
 Accuracy
 
 ```{r}
-true_positive = cm[2, 2] * positive_len
-true_positive
 
+true_positive = cm[2, 2] * positive_len
+  
 false_positive = cm[2, 1] * positive_len
-false_positive
 
 false_negative = cm[1, 2] * negative_len
-false_negative
 
 true_negative = cm[1, 1] * negative_len
-true_negative
 
-accuracy = (true_positive + true_negative)/(positive_len + negative_len)
-accuracy
+calcular_accuracy = function(positivos, negativos) {
+  true_positive = cm[2, 2] * positivos
+  true_positive
+  
+  false_positive = cm[2, 1] * positivos
+  false_positive
+  
+  false_negative = cm[1, 2] * negativos
+  false_negative
+  
+  true_negative = cm[1, 1] * negativos
+  true_negative
+  
+  accuracy = (true_positive + true_negative)/(positivos + negativos)
+  accuracy
+  
+  return(accuracy)
+}
+
+calcular_accuracy(positive_len, negative_len)
 ```
 
 Precision y recall
 
 ```{r}
-precision = true_positive/(true_positive + false_positive)
-precision
+calcular_precision = function(TP, FP) {
+  precision = TP/(TP + FP)
+  print(sprintf("Precision: %f", precision))
+}
 
-recall = true_positive/(true_positive + false_negative)
-recall
+calcular_recall = function(TP, FN) {
+  recall = TP/(TP + FN)
+  print(sprintf("Recall: %f", recall))
+}
+
+precision = calcular_precision(true_positive, false_positive)
+recall = calcular_recall(true_positive, false_negative)
 ```
 
 F1 - score
 
 ```{r}
-f1_score = (2*precision*recall)/(precision + recall)
-f1_score
+calcular_f1_score = function(precision, recall) {
+  f1_score = (2*precision*recall)/(precision + recall)
+  print(sprintf("f1 score: %f", f1_score))
+}
+
+calcular_f1_score(precision, recall)
 ```
 
 AUC-ROC
 
 ```{r}
 library(pROC)
-vector_predicciones = as.numeric(test_set$predicted_class_popularity)
-curva_roc = roc(test_set$popularity, vector_predicciones)
 
-# Extraer el área bajo la curva (AUC)
-auc_value <- auc(curva_roc)
+curva_AUC_ROC = function(clase_predicha, clase_real) {
+  vector_predicciones = as.numeric(clase_predicha)
+  curva_roc = roc(clase_real, vector_predicciones)
+  
+  # Extraer el área bajo la curva (AUC)
+  auc_value <- auc(curva_roc)
+  
+  # Imprimir solo el área bajo la curva (AUC)
+  print(sprintf("Area bajo la curva de AUC-ROC: %f", auc_value))
+  
+  plot(curva_roc, main = "Curva de AUC-ROC", col = "orange", lwd = 3)
+  
+  return(curva_roc)
+}
 
-# Imprimir solo el área bajo la curva (AUC)
-print(auc_value)
-
-plot(curva_roc, main = "Curva de AUC-ROC", col = "orange", lwd = 3)
+curva_default = curva_AUC_ROC(test_set$predicted_class_popularity, test_set$popularity)
 ```
 
 ###Interpretacion de las metricas de performance
@@ -392,7 +453,7 @@ graficar_performance = function(resultado){
   ggplot(resultado, aes(x = Round, y = Value)) +
   geom_line(color = "blue") +
   geom_point(color = "red") +
-  geom_hline(yintercept = 0.8844099, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
+  geom_hline(yintercept = 0.6562452, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
   labs(title = "Progreso del valor del area bajo la curva de AUC-ROC con Optimización Bayesiana",
        x = "Iteración",
        y = "Área Bajo la Curva de AUC-ROC") +
@@ -452,14 +513,14 @@ library(rpart.plot)
 
 # Crear el modelo utilizando los hiperparámetros especificados
 mejor_arbol <- rpart(
-  formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature, 
-  data = test_set, 
+  formula = popularity ~ ., 
+  data = train_set, 
   method = "class", 
   control = rpart.control(
-    maxdepth = 12, 
-    minsplit = 29, 
+    maxdepth = 11, 
+    minsplit = 30, 
     minbucket = 3,
-    cp = 0.01,
+    cp = 0,
     xval = 0
   )
 )
@@ -468,53 +529,77 @@ mejor_arbol <- rpart(
 rpart.plot(mejor_arbol, box.palette = "orange")
 print(mejor_arbol$control)
 ```
-
- 
- 
- 
-```{r}
-test_set_mejor_arbol = test_set
-
-popularidad_predicha  <- predict(mejor_arbol, newdata = test_set_mejor_arbol, type = "class")
-
-test_set_mejor_arbol$predicted_class_popularity <- popularidad_predicha
-
-names(test_set_mejor_arbol)[names(test_set_mejor_arbol) == "predicted_class_popularity"] <- "popularidad_predicha"
-
-library(pROC)
-vector_predicciones = as.numeric(test_set_mejor_arbol$popularidad_predicha)
-curva_roc = roc(test_set_mejor_arbol$popularity, vector_predicciones)
-
-# Extraer el área bajo la curva (AUC)
-auc_value <- auc(curva_roc)
-
-# Imprimir solo el área bajo la curva (AUC)
-print(auc_value)
-
-plot(curva_roc, main = "Curva de AUC-ROC", col = "cyan", lwd = 3)
-```
- 
- 
  
  -> Comparar el rendimiento entre el primer árbol y el árbol optimizado
  
 ```{r}
+predicciones_modelo = predict(mejor_arbol, newdata = test_set, type = "prob")[,2]
 
-arbol_no_optimizado
+test_set$predicciones_optimas = predicciones_modelo
+test_set$predicciones_optimas <- ifelse(test_set$predicciones_optimas >= 0.5, 1, 0)
+test_set$predicciones_optimas <- as.factor(test_set$predicciones_optimas)
+
+curva_optimizada <- roc(test_set$popularity, predicciones_modelo)
+auc_score_mejor_arbol <- auc(roc_curve)
+auc_score_mejor_arbol
+
+# Graficar la primera curva
+plot(curva_default, col = "orange", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+
+# Añadir la segunda curva al mismo gráfico
+lines(curva_optimizada, col = "purple", lwd = 3)
+
+# Añadir una leyenda para diferenciar las curvas
+legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("orange", "purple"), lwd = 3)
 
 
-
-
-
-
+cm_optimizada = generar_matriz_confusion(test_set$popularity, test_set$predicciones_optimas)
+graficar_matriz_confusion(cm_optimizada)
 ```
- 
+
+
+```{r}
+#comparacion matrices de correlacion
+
+graficar_matriz_confusion(cm)
+
+cm_optimizada = generar_matriz_confusion()
+```
+
+
  6. Interpretación de resultados
  
  -> Presentar el árbol final, y detallar las diferencias entre el primero y el último
  
- [ACA]
- 
+```{r}
+library(corrplot)
+
+muestra_numerica <- muestra
+muestra_numerica$popularity <- as.numeric(as.character(muestra_numerica$popularity))
+
+  
+
+numeric_data <- muestra_numerica[, c('popularity', 'duration_min', 'explicit', 'danceability', 
+                                  'energy', 'key', 'loudness', 'mode', 
+                                  'speechiness', 'acousticness', 
+                                  'instrumentalness', 'liveness', 
+                                  'valence', 'tempo', 'time_signature')]
+
+
+# Calcular la matriz de correlación
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Mostrar la matriz de correlación
+print(cor_matrix)
+
+color_pal <- colorRampPalette(c("#081D59", "white", "#FD0604"))(200)
+
+# Visualizar la matriz de correlación usando corrplot
+corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", 
+         tl.cex = 0.8, title = "Matriz de Correlación", mar = c(0,0,1,0), col = color_pal)
+
+```
+
  -> Identificar y discutir las variables más importantes según nuestro mejor árbol
  
  [ACA]
