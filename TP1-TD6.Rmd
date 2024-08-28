@@ -91,6 +91,7 @@ if (nrow(datos) >= 50000) {
   # Verificar el tamaño de la muestra
   nrow(muestra)
 }
+
 ```
 Verificamos que, efectivamente, el dataset resultante tiene 50000 observaciones.
 
@@ -148,7 +149,6 @@ test_indices <- setdiff(remaining_indices, val_indices)
 train_set <- muestra[train_indices, ]
 val_set <- muestra[val_indices, ]
 test_set <- muestra[test_indices, ]
-
 ```
 
 
@@ -228,6 +228,9 @@ Matriz de confusión
 library(caret)
 library(recipes)
 
+
+generar_matriz_confusion
+
 #confusion_matrix <- ConfusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
 confusion_matrix <- confusionMatrix(test_set$predicted_class_popularity, test_set$popularity)
 
@@ -244,7 +247,11 @@ cm[2, 2] <- cm[2, 2] / positive_len
 
 cm
 ```
+
+
+
 ```{r}
+#Graficamos la matriz de confusion
 library(pheatmap)
 # Crear el mapa de calor
 pheatmap(cm,
@@ -254,7 +261,8 @@ pheatmap(cm,
          number_format = "%.2f",
          cluster_rows = FALSE,
          cluster_cols = FALSE,
-         legend = TRUE)
+         legend = TRUE,
+         fontsize_number = 15)
 ```
 
 Accuracy
@@ -377,7 +385,7 @@ result <- BayesianOptimization(
   },
   bounds = limites,
   init_points = 5,
-  n_iter = 10,
+  n_iter = 30,
 )
 
 graficar_performance = function(resultado){
@@ -393,6 +401,8 @@ graficar_performance = function(resultado){
 
 # Extraer el historial de resultados
 result_data <- result$History
+
+mejores_hiperparametros = result$Best_Par
 
 graficar_performance(result_data)
 ```
@@ -435,11 +445,69 @@ fig
 
  -> Elegir el mejor árbol y medir el valor de AUC-ROC con el conjunto de testeo
  
- [ACA]
+```{r}
+# Cargar las librerías necesarias
+library(rpart)
+library(rpart.plot)
+
+# Crear el modelo utilizando los hiperparámetros especificados
+mejor_arbol <- rpart(
+  formula = popularity ~ duration_min + explicit + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + time_signature, 
+  data = test_set, 
+  method = "class", 
+  control = rpart.control(
+    maxdepth = 12, 
+    minsplit = 29, 
+    minbucket = 3,
+    cp = 0.01,
+    xval = 0
+  )
+)
+
+# Graficar el árbol utilizando rpart.plot
+rpart.plot(mejor_arbol, box.palette = "orange")
+print(mejor_arbol$control)
+```
+
+ 
+ 
+ 
+```{r}
+test_set_mejor_arbol = test_set
+
+popularidad_predicha  <- predict(mejor_arbol, newdata = test_set_mejor_arbol, type = "class")
+
+test_set_mejor_arbol$predicted_class_popularity <- popularidad_predicha
+
+names(test_set_mejor_arbol)[names(test_set_mejor_arbol) == "predicted_class_popularity"] <- "popularidad_predicha"
+
+library(pROC)
+vector_predicciones = as.numeric(test_set_mejor_arbol$popularidad_predicha)
+curva_roc = roc(test_set_mejor_arbol$popularity, vector_predicciones)
+
+# Extraer el área bajo la curva (AUC)
+auc_value <- auc(curva_roc)
+
+# Imprimir solo el área bajo la curva (AUC)
+print(auc_value)
+
+plot(curva_roc, main = "Curva de AUC-ROC", col = "cyan", lwd = 3)
+```
+ 
+ 
  
  -> Comparar el rendimiento entre el primer árbol y el árbol optimizado
  
- [ACA]
+```{r}
+
+arbol_no_optimizado
+
+
+
+
+
+
+```
  
  6. Interpretación de resultados
  
