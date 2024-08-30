@@ -1,0 +1,271 @@
+### Cargamos el dataset y limpiamos las variables que no nos sirven
+
+```{r}
+library(readr)
+spotify_data  = read.csv("spotify_data.csv")
+spotify_data <- subset(spotify_data, select = -track_genre)
+spotify_data <- subset(spotify_data, select = -X)
+
+datos <- read_csv("cleaned_dataset.csv",col_select =-c(track_id,artists,album_name,track_name), show_col_types = FALSE)
+datos <- subset(datos, select = -track_genre)
+
+# Eliminar la primera columna usando subset
+datos <- subset(datos, select = -1)
+```
+
+### Nos generamos una muestra aleatoria de 50000 obs
+
+```{r}
+set.seed(33016244)
+
+# Crear un vector de índices aleatorios
+indices <- sample(1:nrow(datos), 50000)
+  
+# Seleccionar las filas correspondientes a esos índices
+muestra <- datos[indices, ]
+  
+# Verificar el tamaño de la muestra
+nrow(muestra)
+
+```
+
+### Cambiamos las unidades y formateamos las variables
+
+```{r}
+# Reemplazar duration_ms con la duración en minutos
+muestra$duration_ms <- muestra$duration_ms / 60000
+
+# Renombrar la variable a duration_min para reflejar el nuevo contenido
+names(muestra)[names(muestra) == "duration_ms"] <- "duration_min"
+
+#Convertir la popularidad a una variable numerica binaria
+muestra$popularity <- ifelse(muestra$popularity >= 34, 1, 0)
+
+
+# Convertir la columna a factor
+muestra$popularity = as.factor(muestra$popularity)
+
+
+muestra$explicit <- ifelse(muestra$explicit == TRUE, 1, 0)
+```
+
+### Nos creamos 3 datasets train, val y test (70,15,15)
+
+```{r}
+
+n <- nrow(muestra)
+
+train_indices <- sample(1:n, size = 0.7 * n)
+remaining_indices <- setdiff(1:n, train_indices)
+val_indices <- sample(remaining_indices, size = 0.15 * n)
+test_indices <- setdiff(remaining_indices, val_indices)
+
+train_set <- muestra[train_indices, ]
+val_set <- muestra[val_indices, ]
+test_set <- muestra[test_indices, ]
+
+```
+
+### Creamos un primer árbol básico
+
+```{r}
+
+library(rpart)
+library(rpart.plot)
+
+arbol_basico = rpart(formula = popularity ~ ., data = train_set, method = "class")
+
+rpart.plot(arbol_basico, box.palette = "orange")
+
+print(rpart.control())
+
+```
+
+### Predicciones usando el árbol básico
+
+
+```{r}
+
+first_predictions  <- predict(arbol_basico, newdata = test_set, type = "class")
+
+test_set$first_popularity_predictions <- first_predictions
+
+```
+
+### Evaluamos con AUC-ROC
+
+```{r}
+
+library(pROC)
+
+curva_AUC_ROC = function(clase_predicha, clase_real) {
+  vector_predicciones = as.numeric(clase_predicha)
+  curva_roc = roc(clase_real, vector_predicciones)
+  
+  # Extraer el área bajo la curva (AUC)
+  auc_value <- auc(curva_roc)
+  
+  # Imprimir solo el área bajo la curva (AUC)
+  print(sprintf("Area bajo la curva de AUC-ROC: %f", auc_value))
+  
+  plot(curva_roc, main = "Curva de AUC-ROC", col = "orange", lwd = 3)
+  
+  return(curva_roc)
+}
+
+curva_default = curva_AUC_ROC(test_set$first_popularity_predictions, test_set$popularity)
+```
+
+```{r}
+# Función para evaluar el rendimiento del árbol, con dataset como parámetro
+evaluar_arbol <- function(maxdepth, minsplit, minbucket, entrenamiento, validacion,testing) {
+  modelo <- rpart(
+    formula = entrenamiento$popularity ~ ., 
+    data = entrenamiento, 
+    method = "class", 
+    control = rpart.control(
+      maxdepth = as.integer(maxdepth), 
+      minsplit = as.integer(minsplit), 
+      minbucket = as.integer(minbucket),
+      cp = 0,
+      xval = 0
+    )
+  )
+  predicciones <- predict(modelo, validacion, type = "prob")[,2]
+  roc_curve <- roc(validacion$popularity, predicciones)
+  auc_score <- auc(roc_curve)
+  
+  # Devolver una lista con el campo Score
+  list(Score = auc_score)
+}
+
+# Función para graficar el performance del árbol
+
+graficar_performance = function(resultado){
+  ggplot(resultado, aes(x = Round, y = Value)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  geom_hline(yintercept = 0.6562452, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
+  labs(title = "Progreso del valor del area bajo la curva de AUC-ROC con Optimización Bayesiana",
+       x = "Iteración",
+       y = "Área Bajo la Curva de AUC-ROC") +
+  theme_minimal()
+}
+
+```
+
+```{r}
+library(rBayesianOptimization)
+library(pROC)
+library(ggplot2)
+
+# Definir los límites de los hiperparámetros
+limites <- list(
+  maxdepth = c(1L, 30L), 
+  minsplit = c(0L, 100L), 
+  minbucket = c(1L, 30L)
+)
+
+# Ejecutar la optimización bayesiana
+arbol_optimizado <- BayesianOptimization(
+  FUN = function(maxdepth, minsplit, minbucket) {
+    evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set,test_set)
+  },
+  bounds = limites,
+  init_points = 50,
+  n_iter = 25,
+)
+
+# Extraer el historial de resultados
+result_data <- arbol_optimizado$History
+
+mejores_hiperparametros = arbol_optimizado$Best_Par
+
+graficar_performance(result_data)
+```
+
+```{r}
+# Cargar las librerías necesarias
+library(rpart)
+library(rpart.plot)
+
+# Crear el modelo utilizando los hiperparámetros especificados
+mejor_arbol <- rpart(
+  formula = popularity ~ ., 
+  data = train_set, 
+  method = "class", 
+  control = rpart.control(
+    maxdepth = 15, 
+    minsplit = 96, 
+    minbucket = 23,
+    cp = 0,
+    xval = 0
+  )
+)
+
+# Graficar el árbol utilizando rpart.plot
+#rpart.plot(mejor_arbol, box.palette = "violet")
+#print(mejor_arbol$control)
+
+predicciones_modelo = predict(mejor_arbol, newdata = test_set, type = "prob")[,2]
+
+test_set$predicciones_optimas = predicciones_modelo
+test_set$predicciones_optimas <- ifelse(test_set$predicciones_optimas >= 0.5, 1, 0)
+test_set$predicciones_optimas <- as.factor(test_set$predicciones_optimas)
+
+curva_optimizada <- roc(test_set$popularity, predicciones_modelo)
+auc_score_mejor_arbol <- auc(curva_optimizada)
+auc_score_mejor_arbol
+```
+
+```{r}
+
+
+# Graficar la primera curva
+#plot(curva_default, col = "orange", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+
+# Añadir la segunda curva al mismo gráfico
+#lines(curva_optimizada, col = "purple", lwd = 3)
+
+# Añadir una leyenda para diferenciar las curvas
+#legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("orange", "purple"), lwd = 3)
+```
+
+
+```{r}
+
+normalize <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+# Plot with ggplot
+plot_value_and_variable <- function(variable, colour){
+  ggplot(result_data_normalized, aes(x = Round)) +
+  geom_line(aes(y = variable), color = colour) +  # Left y-axis
+  geom_line(aes(y = Value * max(result_data$Value) / max(result_data_normalized$Value)), color = "green") + # Right y-axis
+  scale_y_continuous(
+    name = "variable",
+    sec.axis = sec_axis(~ . * max(result_data_normalized$Value) / max(result_data$Value), name = "Value")  # Secondary axis
+  ) +
+  labs(x = "Iteration") +
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(color = colour),
+    axis.title.y.right = element_text(color = "green")
+  )
+}
+
+# Apply normalization
+result_data_normalized <- result_data
+result_data_normalized$maxdepth <- normalize(result_data$maxdepth)
+result_data_normalized$minsplit <- normalize(result_data$minsplit)
+result_data_normalized$minbucket <- normalize(result_data$minbucket)
+result_data_normalized$Value <- normalize(result_data$Value)
+
+plot_value_and_variable(result_data_normalized$maxdepth, "red")
+
+plot_value_and_variable(result_data_normalized$minsplit, "purple")
+
+plot_value_and_variable(result_data_normalized$minbucket, "blue")
+
+```

@@ -149,10 +149,12 @@ muestra$explicit <- ifelse(muestra$explicit == TRUE, 1, 0)
 
 ```{r}
 n <- nrow(muestra)
+
 train_indices <- sample(1:n, size = 0.7 * n)
 remaining_indices <- setdiff(1:n, train_indices)
 val_indices <- sample(remaining_indices, size = 0.15 * n)
 test_indices <- setdiff(remaining_indices, val_indices)
+
 train_set <- muestra[train_indices, ]
 val_set <- muestra[val_indices, ]
 test_set <- muestra[test_indices, ]
@@ -169,10 +171,10 @@ REMINDER: CONVERSION DE LA VARIABLE track_genre
 
 ```{r}
 library(rpart)
+library(rpart.plot)
 
 arbol = rpart(formula = popularity ~ ., data = train_set, method = "class")
 
-library(rpart.plot)
 rpart.plot(arbol, box.palette = "orange")
 
 print(rpart.control())
@@ -434,9 +436,9 @@ evaluar_arbol <- function(maxdepth, minsplit, minbucket, train_set, val_set) {
 
 # Definir los límites de los hiperparámetros
 limites <- list(
-  maxdepth = c(7L, 20L), 
-  minsplit = c(5L, 30L), 
-  minbucket = c(1L, 3L)
+  maxdepth = c(5L, 30L), 
+  minsplit = c(0L, 100L), 
+  minbucket = c(1L, 10L)
 )
 
 # Ejecutar la optimización bayesiana
@@ -445,8 +447,8 @@ result <- BayesianOptimization(
     evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set)
   },
   bounds = limites,
-  init_points = 5,
-  n_iter = 30,
+  init_points = 25,
+  n_iter = 25,
 )
 
 graficar_performance = function(resultado){
@@ -502,7 +504,155 @@ fig <- fig %>%
 fig
 ```
  
+ 
+ 
+ 
+```{r}
+library(plotly)
 
+# Crear gráfico 3D
+fig2 <- plot_ly(
+  data = result_data,
+  x = ~maxdepth,
+  y = ~minbucket,
+  z = ~Value,
+  type = 'scatter3d',
+  mode = 'markers',
+  marker = list(size = 5, color = ~Value, colorscale = 'Viridis', showscale = TRUE)
+)
+
+# Configurar el título y los ejes
+fig2 <- fig2 %>%
+  layout(
+    title = 'Progreso del AUC en función de maxdepth y minbucket',
+    scene = list(
+      xaxis = list(title = 'maxdepth'),
+      yaxis = list(title = 'minbucket'),
+      zaxis = list(title = 'Área Bajo la Curva (AUC)')
+    )
+  )
+
+# Mostrar el gráfico
+fig2
+```
+
+```{r}
+library(plotly)
+
+# Crear gráfico 3D
+fig3 <- plot_ly(
+  data = result_data,
+  x = ~minsplit,
+  y = ~minbucket,
+  z = ~Value,
+  type = 'scatter3d',
+  mode = 'markers',
+  marker = list(size = 5, color = ~Value, colorscale = 'Viridis', showscale = TRUE)
+)
+
+# Configurar el título y los ejes
+fig3 <- fig3 %>%
+  layout(
+    title = 'Progreso del AUC en función de maxdepth y minbucket',
+    scene = list(
+      xaxis = list(title = 'minsplit'),
+      yaxis = list(title = 'minbucket'),
+      zaxis = list(title = 'Área Bajo la Curva (AUC)')
+    )
+  )
+
+# Mostrar el gráfico
+fig3
+```
+
+
+```{r}
+
+# Define the grid search limits
+grid_search_limites <- list(
+  maxdepth = c(25:30), 
+  minsplit = c(85:95), 
+  minbucket = c(8:10)
+)
+
+# Create the grid search
+grid_search <- expand.grid(grid_search_limites)
+
+# Placeholder for results
+results_gs <- data.frame(
+  max_depth = integer(),
+  min_split = integer(),
+  min_bucket = integer(),
+  performance = numeric()
+)
+# Loop through each combination of parameters
+for (i in 1:nrow(grid_search)) {
+  model_gd <- rpart(
+    popularity ~ ., 
+    data = train_set, 
+    method = "class", 
+    control = rpart.control(
+      maxdepth = grid_search$maxdepth[i],
+      minsplit = grid_search$minsplit[i],
+      minbucket = grid_search$minbucket[i],
+      cp = 0,
+      xval = 0
+    )
+  )
+  
+  performance <- evaluar_arbol(grid_search$maxdepth[i], 
+                               grid_search$minsplit[i],
+                               grid_search$minbucket[i],
+                               train_set,
+                               val_set)
+  
+  # Store the results in the data frame
+  results_gs <- rbind(results_gs, data.frame(
+    max_depth = grid_search$maxdepth[i],
+    min_split = grid_search$minsplit[i],
+    min_bucket = grid_search$minbucket[i],
+    performance = performance
+  ))
+  
+  #printcp(model)  # Print complexity parameter table to check tree complexity
+  #plotcp(model)   # Visualize the complexity of the decision tree
+  
+  # Debugging prints
+  print(paste("maxdepth =", grid_search$maxdepth[i], 
+              "minsplit =", grid_search$minsplit[i], 
+              "minbucket =", grid_search$minbucket[i], 
+              "Performance =", performance))
+}
+
+# View the results
+print(results_gs)
+max(results_gs$Score)
+
+```
+
+```{r}
+# Cargar las librerías necesarias
+library(rpart)
+library(rpart.plot)
+
+# Crear el modelo utilizando los hiperparámetros especificados
+mejor_arbol_gd <- rpart(
+  formula = popularity ~ ., 
+  data = train_set, 
+  method = "class", 
+  control = rpart.control(
+    maxdepth = 27, 
+    minsplit = 97, 
+    minbucket = 10,
+    cp = 0,
+    xval = 0
+  )
+)
+
+# Graficar el árbol utilizando rpart.plot
+rpart.plot(mejor_arbol_gd, box.palette = "violet")
+print(mejor_arbol_gd$control)
+```
 
  -> Elegir el mejor árbol y medir el valor de AUC-ROC con el conjunto de testeo
  
@@ -517,9 +667,9 @@ mejor_arbol <- rpart(
   data = train_set, 
   method = "class", 
   control = rpart.control(
-    maxdepth = 15, 
-    minsplit = 27, 
-    minbucket = 2,
+    maxdepth = 28, #15
+    minsplit = 98, #27
+    minbucket = 10, #2
     cp = 0,
     xval = 0
   )
@@ -540,7 +690,7 @@ test_set$predicciones_optimas <- ifelse(test_set$predicciones_optimas >= 0.5, 1,
 test_set$predicciones_optimas <- as.factor(test_set$predicciones_optimas)
 
 curva_optimizada <- roc(test_set$popularity, predicciones_modelo)
-auc_score_mejor_arbol <- auc(roc_curve)
+auc_score_mejor_arbol <- auc(curva_optimizada)
 auc_score_mejor_arbol
 
 # Graficar la primera curva
@@ -551,6 +701,19 @@ lines(curva_optimizada, col = "purple", lwd = 3)
 
 # Añadir una leyenda para diferenciar las curvas
 legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("orange", "purple"), lwd = 3)
+```
+
+```{r}
+predicciones_modelo_gd = predict(mejor_arbol_gd, newdata = test_set, type = "prob")[,2]
+
+test_set$predicciones_optimas_gd = predicciones_modelo_gd
+test_set$predicciones_optimas_gd <- ifelse(test_set$predicciones_optimas_gd >= 0.5, 1, 0)
+test_set$predicciones_optimas_gd <- as.factor(test_set$predicciones_optimas_gd)
+
+curva_optimizada_gd <- roc(test_set$popularity, predicciones_modelo_gd)
+
+auc_score_mejor_arbol_gd <- auc(curva_optimizada_gd)
+auc_score_mejor_arbol_gd
 ```
 
 
@@ -653,6 +816,39 @@ result_data_20_NA <- result_20_NA$History
 graficar_performance(result_data_20_NA)
 
 ```
+```{r}
+# Crear el modelo utilizando los hiperparámetros especificados
+mejor_arbol_20_na <- rpart(
+  formula = popularity ~ ., 
+  data = train_20_na, 
+  method = "class", 
+  control = rpart.control(
+    maxdepth = 17, 
+    minsplit = 71, 
+    minbucket = 7,
+    cp = 0,
+    xval = 0
+  )
+)
+
+# Graficar el árbol utilizando rpart.plot
+rpart.plot(mejor_arbol_20_na, box.palette = "violet")
+print(mejor_arbol_20_na$control)
+```
+
+```{r}
+predicciones_modelo_20_na = predict(mejor_arbol_20_na, newdata = test_20_na, type = "prob")[,2]
+
+test_20_na$predicciones_optimas_20_na = predicciones_modelo_20_na
+test_20_na$predicciones_optimas_20_na <- ifelse(test_20_na$predicciones_optimas_20_na >= 0.5, 1, 0)
+test_20_na$predicciones_optimas_20_na <- as.factor(test_20_na$predicciones_optimas_20_na)
+
+curva_optimizada_20_na <- roc(test_20_na$popularity, predicciones_modelo_20_na)
+
+auc_score_mejor_arbol_20_na <- auc(curva_optimizada_20_na)
+auc_score_mejor_arbol_20_na
+```
+
 
 ```{r}
 # Ejecutar la optimización bayesiana
@@ -670,6 +866,8 @@ result_data_50_NA <- result_50_NA$History
 graficar_performance(result_data_50_NA)
 
 ```
+
+
 ```{r}
 # Ejecutar la optimización bayesiana
 result_75_NA <- BayesianOptimization(
