@@ -66,7 +66,7 @@ Una vez cargado, empieza la etapa de limpieza de los datos. Por ejemplo, lo prim
 
 
 ```{r}
-set.seed(33016244)
+set.seed(45963658)
 
 if (nrow(spotify_data) >= 50000) {
   # Crear un vector de índices aleatorios
@@ -92,9 +92,24 @@ names(muestra)[names(muestra) == "duration_ms"] = "duration_min"
 
 # Convertir las variables 'key' y 'time_signature' a factores
 muestra <- subset(muestra, select = -track_genre)
-muestra <- subset(muestra, select = -key)
-muestra <- subset(muestra, select = -time_signature)
+#muestra <- subset(muestra, select = -key)
+#muestra <- subset(muestra, select = -time_signature)
 ```
+
+```{r}
+# Mapeo para la variable 'key'
+key_mapping <- c("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
+# Convertir los valores de 'key' a palabras
+muestra$key <- key_mapping[as.numeric(muestra$key) + 1]
+
+# Mapeo para la variable 'time_signature'
+time_signature_mapping <- c("0/4", "1/4", "2/4", "3/4", "4/4", "5/4")
+
+# Convertir los valores de 'time_signature' a palabras
+muestra$time_signature <- time_signature_mapping[as.numeric(muestra$time_signature) + 1]
+```
+
 
 ### **Estadistica Descriptiva**
 
@@ -104,6 +119,21 @@ muestra <- subset(muestra, select = -time_signature)
 sapply(muestra, summary)
 
 ```
+
+
+```{r}
+library(ggplot2)
+
+# Graficar la función de densidad de instrumentalness
+ggplot(muestra, aes(x = instrumentalness, fill=as.factor(popularity))) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Función de Densidad de Instrumentalness",
+       x = "Instrumentalness",
+       y = "Densidad") +
+  theme_minimal()
+
+```
+
 
 
 ```{r}
@@ -119,13 +149,7 @@ Teniendo eso en cuenta, vamos a realizar una transformación de la variable *pop
 ```{r}
 #Convertir la popularidad a una variable numerica binaria
 muestra$popularity <- ifelse(muestra$popularity >= 34, 1, 0)
-
-
-# Convertir la columna a factor
-muestra$popularity = as.factor(muestra$popularity)
-
-
-muestra$explicit <- ifelse(muestra$explicit == TRUE, 1, 0)
+muestra$mode <- ifelse(muestra$mode == 1, 1, 0)
 ```
 
 
@@ -155,7 +179,7 @@ library(rpart)
 arbol = rpart(formula = popularity ~ ., data = train_set, method = "class")
 
 library(rpart.plot)
-rpart.plot(arbol, box.palette = "orange")
+rpart.plot(arbol, box.palette = "lightblue")
 
 print(rpart.control())
 ```
@@ -201,23 +225,9 @@ Los hiperparámetros más relevantes y su valor por defecto en rpart son:
 ###Predicciones
 
 ```{r}
-
 predictions_class  <- predict(arbol, newdata = test_set, type = "class")
 
-test_set$predicted_class_popularity <- predictions_class
-
-agregar_predicciones = function(dataset, nombre_columna_predicciones, arbol) {
-  predictions_class  <- predict(arbol, newdata = dataset, type = "class")
-
-  dataset[[nombre_columna_predicciones]] <- predictions_class
-  
-  message("Columna ", nombre_columna_predicciones, " agregada exitosamente al dataset.")
-  #predictions_prob  <- predict(arbol, newdata = test_set, type = "prob")
-  
-  #test_set$predicted_prob_popularity <- predictions_prob
-}
-
-agregar_predicciones(test_set, "predicted_class_popularity", arbol)
+test_set$predicted_class_popularity <- as.numeric(predictions_class) - 1
 ```
 
 
@@ -229,114 +239,57 @@ Matriz de confusión
 library(caret)
 library(recipes)
 
-positive_len <- length(test_set$predicted_class_popularity[test_set$predicted_class_popularity == 1])
-negative_len <- length(test_set$predicted_class_popularity[test_set$predicted_class_popularity == 0])
-
 generar_matriz_confusion = function(clase_real, clase_predicha){
-  #Requiere: el formato de los parametros sea "dataset$clase"
+  # Convertir las columnas a factores con los mismos niveles
+  clase_real_factor <- factor(clase_real, levels = c(0, 1))
+  clase_predicha_factor <- factor(clase_predicha, levels = c(0, 1))
   
-  confusion_matrix = confusionMatrix(clase_predicha, clase_real)
+  # Calcular la matriz de confusión
+  matriz_confusion = confusionMatrix(clase_predicha_factor, clase_real_factor)
   
-  cm = confusion_matrix$table
+  # Extraer la tabla de la matriz de confusión
+  cm = matriz_confusion$table
   
-  positive_len <- length(clase_real[clase_real == 1])
-  negative_len <- length(clase_real[clase_real == 0])
+  # Calcular las longitudes positivas y negativas
+  positive_len <- sum(clase_real == 1)
+  negative_len <- sum(clase_real == 0)
   
+  # Normalizar la matriz de confusión
   cm[1, 1] <- cm[1, 1] / negative_len
   cm[1, 2] <- cm[1, 2] / positive_len
   cm[2, 1] <- cm[2, 1] / negative_len
   cm[2, 2] <- cm[2, 2] / positive_len
   
-  return(cm)
-}
-
-cm = generar_matriz_confusion(test_set$popularity, test_set$predicted_class_popularity)
-```
-
-
-
-```{r}
-#Graficamos la matriz de confusion
-library(pheatmap)
-
-graficar_matriz_confusion = function(tabla_matriz_confusion) {
-  # Crear el mapa de calor
-  pheatmap(tabla_matriz_confusion,
+  pheatmap(cm,
            display_numbers = TRUE,
-           color = colorRampPalette(c("coral", "gold"))(50),
+           color = colorRampPalette(c("coral", "orange"))(50),
            main = "Confusion Matrix",
            number_format = "%.2f",
            cluster_rows = FALSE,
            cluster_cols = FALSE,
            legend = TRUE,
            fontsize_number = 15)
+  
+  return(matriz_confusion)
 }
 
-graficar_matriz_confusion(cm)
+# Llamar a la función con las columnas del dataset
+matriz_de_confusion = generar_matriz_confusion(test_set$popularity, test_set$predicted_class_popularity)
 ```
 
-Accuracy
+Accuracy, Precision, Recall y F1_score
+
 
 ```{r}
+accuracy <- matriz_de_confusion$overall['Accuracy']
+precision <- matriz_de_confusion$byClass['Precision']
+recall <- matriz_de_confusion$byClass['Recall']
+f1_score <- matriz_de_confusion$byClass['F1']
 
-true_positive = cm[2, 2] * positive_len
-  
-false_positive = cm[2, 1] * positive_len
-
-false_negative = cm[1, 2] * negative_len
-
-true_negative = cm[1, 1] * negative_len
-
-calcular_accuracy = function(positivos, negativos) {
-  true_positive = cm[2, 2] * positivos
-  true_positive
-  
-  false_positive = cm[2, 1] * positivos
-  false_positive
-  
-  false_negative = cm[1, 2] * negativos
-  false_negative
-  
-  true_negative = cm[1, 1] * negativos
-  true_negative
-  
-  accuracy = (true_positive + true_negative)/(positivos + negativos)
-  accuracy
-  
-  return(accuracy)
-}
-
-calcular_accuracy(positive_len, negative_len)
-```
-
-Precision y recall
-
-```{r}
-calcular_precision = function(TP, FP) {
-  precision = TP/(TP + FP)
-  print(sprintf("Precision: %f", precision))
-  return(precision)
-}
-
-calcular_recall = function(TP, FN) {
-  recall = TP/(TP + FN)
-  print(sprintf("Recall: %f", recall))
-  return(recall)
-}
-
-precision = calcular_precision(true_positive, false_positive)
-recall = calcular_recall(true_positive, false_negative)
-```
-
-F1 - score
-
-```{r}
-calcular_f1_score = function(precision, recall) {
-  f1_score = (2*precision*recall)/(precision + recall)
-  print(sprintf("f1 score: %f", f1_score))
-}
-
-calcular_f1_score(precision, recall)
+accuracy
+precision
+recall
+f1_score
 ```
 
 AUC-ROC
@@ -354,7 +307,7 @@ curva_AUC_ROC = function(clase_predicha, clase_real) {
   # Imprimir solo el área bajo la curva (AUC)
   print(sprintf("Area bajo la curva de AUC-ROC: %f", auc_value))
   
-  plot(curva_roc, main = "Curva de AUC-ROC", col = "orange", lwd = 3)
+  plot(curva_roc, main = "Curva de AUC-ROC", col = "lightblue", lwd = 3)
   
   return(curva_roc)
 }
@@ -395,10 +348,10 @@ library(pROC)
 library(ggplot2)
 
 # Función para evaluar el rendimiento del árbol, con dataset como parámetro
-evaluar_arbol <- function(maxdepth, minsplit, minbucket, train_set, val_set) {
+evaluar_arbol <- function(maxdepth, minsplit, minbucket, training, validation) {
   modelo <- rpart(
-    formula = train_set$popularity ~ ., 
-    data = train_set, 
+    formula = popularity ~ ., 
+    data = training, 
     method = "class", 
     control = rpart.control(
       maxdepth = as.integer(maxdepth), 
@@ -408,19 +361,19 @@ evaluar_arbol <- function(maxdepth, minsplit, minbucket, train_set, val_set) {
       xval = 0
     )
   )
-  predicciones <- predict(modelo, val_set, type = "prob")[,2]
-  roc_curve <- roc(test_set$popularity, predicciones)
+  predicciones <- predict(modelo, validation, type = "prob")[,2]
+  roc_curve <- roc(as.numeric(validation$popularity), predicciones)
   auc_score <- auc(roc_curve)
   
   # Devolver una lista con el campo Score
-  list(Score = auc_score)
+  return(list(Score = auc_score))
 }
 
 # Definir los límites de los hiperparámetros
 limites <- list(
-  maxdepth = c(7L, 20L), 
-  minsplit = c(5L, 30L), 
-  minbucket = c(1L, 3L)
+  maxdepth = c(1L, 30L), 
+  minsplit = c(0L, 100L), 
+  minbucket = c(1L, 30L)
 )
 
 # Ejecutar la optimización bayesiana
@@ -429,15 +382,15 @@ result <- BayesianOptimization(
     evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set)
   },
   bounds = limites,
-  init_points = 5,
-  n_iter = 30,
+  init_points = 30,
+  n_iter = 15,
 )
 
 graficar_performance = function(resultado){
   ggplot(resultado, aes(x = Round, y = Value)) +
   geom_line(color = "blue") +
   geom_point(color = "red") +
-  geom_hline(yintercept = 0.6562452, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
+  geom_hline(yintercept = 0.6819935, color = "orange", linetype = "solid", size = 1, alpha = 0.70) +
   labs(title = "Progreso del valor del area bajo la curva de AUC-ROC con Optimización Bayesiana",
        x = "Iteración",
        y = "Área Bajo la Curva de AUC-ROC") +
@@ -501,9 +454,9 @@ mejor_arbol <- rpart(
   data = train_set, 
   method = "class", 
   control = rpart.control(
-    maxdepth = 17, 
-    minsplit = 15, 
-    minbucket = 1,
+    maxdepth = 15, 
+    minsplit = 100, 
+    minbucket = 30,
     cp = 0,
     xval = 0
   )
@@ -520,31 +473,28 @@ print(mejor_arbol$control)
 predicciones_modelo = predict(mejor_arbol, newdata = test_set, type = "prob")[,2]
 
 test_set$predicciones_optimas = predicciones_modelo
-test_set$predicciones_optimas <- ifelse(test_set$predicciones_optimas >= 0.5, 1, 0)
-test_set$predicciones_optimas <- as.factor(test_set$predicciones_optimas)
 
-curva_optimizada <- roc(test_set$popularity, predicciones_modelo)
+
+curva_optimizada <- roc(as.numeric(test_set$popularity), predicciones_modelo)
 auc_score_mejor_arbol <- auc(curva_optimizada)
 auc_score_mejor_arbol
 
 # Graficar la primera curva
-plot(curva_default, col = "orange", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+plot(curva_default, col = "lightblue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
 
 # Añadir la segunda curva al mismo gráfico
-lines(curva_optimizada, col = "purple", lwd = 3)
+lines(curva_optimizada, col = "red", lwd = 3)
 
 # Añadir una leyenda para diferenciar las curvas
-legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("orange", "purple"), lwd = 3)
+legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("lightblue", "red"), lwd = 3)
 ```
 
 
 ```{r}
 #comparacion matrices de correlacion
 
-graficar_matriz_confusion(cm)
+matriz_de_confusion_optimizada = generar_matriz_confusion(test_set$popularity, test_set$predicciones_optimas)
 
-cm_optimizada = generar_matriz_confusion(test_set$popularity, test_set$predicciones_optimas)
-graficar_matriz_confusion(cm_optimizada)
 ```
 
 
@@ -556,7 +506,7 @@ graficar_matriz_confusion(cm_optimizada)
 library(corrplot)
 
 muestra_numerica <- muestra
-muestra_numerica$popularity <- as.numeric(as.character(muestra_numerica$popularity))
+muestra_numerica$popularity <- muestra_numerica$popularity
 
   
 
@@ -587,7 +537,7 @@ corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black",
  
  7. Análisis del impacto de los valores faltantes
  
- -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras.     En el primero 20%, el segundo 50% y el tercero 75%
+ -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras. En el primero 20%, el segundo 50% y el tercero 75%
  
 ```{r}
 # Función para reemplazar un porcentaje de valores al azar con NA
