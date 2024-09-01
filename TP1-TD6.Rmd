@@ -796,15 +796,19 @@ Para nuestra sorpresa, descubirmos que cuando testeamos a los modelos entrenados
 
 ###***8. Conclusiones y discusión***
 
-  -> Resumir los hallazgos principales del análisis.
-  
-  [ACA]
-  
-  -> Reflexionar sobre la efectividad del árbol de decisión para el problema planteado.
-  
-  [ACA]
-  
-  -> Sugerir posibles mejoras o direcciones futuras para el análisis.
-  
-  [ACA]
+Luego de entrenar el modelo optimizado, logramos predecir si una canción será popular (según el umbral definido por nosotros)
+utilizando únicamente las características disponibles en el dataset de Spotify. Aunque el modelo alcanzó un nivel de precisión
+de 0.837, los resultados no fueron tan satisfactorios como esperábamos. 
+
+Al mejorar el modelo mediante la optimización de los hiperparámetros, logramos incrementar el área bajo la curva AUC-ROC en
+aproximadamente un 10%. Esto se consiguió a través de una optimización bayesiana con 1000 iteraciones.
+
+En cuanto a la efectividad del árbol de decisión para este problema, esperábamos un rendimiento superior. Después de numerosos
+intentos de mejora, concluimos que la popularidad de una canción no parece estar fuertemente correlacionada con las variables
+presentes en el dataset. Además, es posible que el enfoque basado en modelos de árboles de decisión no sea el más adecuado
+para este tipo de datos.  
+
+Por lo tanto, sugerimos explorar otros tipos de modelos, como regresión logística, máquinas de vectores de soporte (SVM)
+o redes neuronales, que podrían ofrecer un mejor rendimiento en la predicción de la popularidad de canciones, dadas las
+características del dataset. Este cambio de enfoque podría mejorar considerablemente la precisión y la utilidad del modelo.
 
