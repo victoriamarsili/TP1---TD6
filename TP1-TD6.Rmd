@@ -36,7 +36,7 @@ Decidimos abordar la clasificación binaria estableciendo un umbral para definir
 
 - *energy*: Representa la intensidad y actividad de una pista (0.0 = baja energía, 1.0 = alta energía).
 
-- *key*: La clave musical de la pista mapeada usando la notación estándar de Clase de Tono.Por ejemplo, 0 = C, 1 = C♯/D♭, 2 = D, y así sucesivamente. La Clase de Tonos agrupa todos los tonos que son equivalentes en diferentes octavas, permitiendo una representación simplificada de las notas musicales. Si no se detectó ninguna tonalidad, el valor es -1. 
+- *key*: La clave musical de la pista mapeada usando la notación estándar de Clase de Tono. La Clase de Tonos agrupa todos los tonos que son equivalentes en diferentes octavas, permitiendo una representación simplificada de las notas musicales.
 
 - *loudness*: Volumen general de la pista en decibelios (dB).
 
@@ -54,7 +54,7 @@ Decidimos abordar la clasificación binaria estableciendo un umbral para definir
 
 - *tempo*: Tempo estimado de la pista en pulsaciones por minuto (BPM).
 
-- *time_signature*: Compás estimado de la pista (3 a 7). 
+- *time_signature*: Compás estimado de la pista
 
 
 Aclaraciones: 
@@ -64,7 +64,7 @@ Por otro lado, el contexto en el cuál se aplicaría nuestro modelo sería un ar
 
 Los árboles de decisión son fáciles de interpretar y visualizar, lo que permite entender cómo las diferentes variables predictoras influyen en la predicción de si una canción es popular o no. Esto es especialmente útil para artistas que desean conocer qué características de sus canciones impactan en su popularidad.
 
-Las características intrínsecas de nuestro conjunto de datos —como la combinación de variables categóricas y numéricas, la posible presencia de relaciones no lineales, y la necesidad de interpretabilidad— hacen que el uso de árboles de decisión sea una elección justificada y adecuada para nuestro análisis de predicción de la popularidad de las canciones en Spotify.
+Las características intrínsecas de nuestro conjunto de datos, como la combinación de variables categóricas y numéricas, la posible presencia de relaciones no lineales, y la necesidad de interpretabilidad hacen que el uso de árboles de decisión sea una elección justificada y adecuada para nuestro análisis de predicción de la popularidad de las canciones en Spotify.
 
 También nos gustaría explicar cual es la diferencia entre instrumentalness y speechiness. 
 Instrumentalness: Se centra en la ausencia de cualquier tipo de contenido vocal, incluyendo tanto palabras habladas como cantadas. Una pista con alta instrumentalness puede incluir sonidos no verbales como “ooh” y “aah”, pero no letras cantadas o habladas.
@@ -81,7 +81,7 @@ table(is.na(datos))
 ```
 
 ```{r}
-datos <- datos[, -1]
+datos = datos[, -1] #Hacemos esto ya que al cargar el dataset se genera una columna con indices
 ```
 
 
@@ -98,7 +98,7 @@ ggplot(datos, aes(x = instrumentalness, y = speechiness)) +
   theme_minimal()
 
 # Calculamos explícitamente la correlación entre instrumentalness y speechiness
-correlacion <- cor(datos$instrumentalness, datos$speechiness)
+correlacion = cor(datos$instrumentalness, datos$speechiness)
 
 # Imprimimos el resultado
 correlacion
@@ -136,7 +136,8 @@ Teniendo eso en cuenta, vamos a realizar una transformación de la variable *pop
 
 ```{r}
 #Convertir la popularidad a una variable numerica binaria
-datos$popularity <- ifelse(datos$popularity >= 34, 1, 0)
+datos$popularity = ifelse(datos$popularity >= 34, 1, 0)
+datos$popularity = as.factor(datos$popularity)
 ```
 
 ## **3. Construcción de árbol de decisión básico**
@@ -144,28 +145,30 @@ datos$popularity <- ifelse(datos$popularity >= 34, 1, 0)
 ### **Division del dataset en train, validation y test**
 
 ```{r}
+set.seed(24061987)
+
 # Obtenemos el total de filas que tiene nuestro dataset (50000)
-n <- nrow(datos)
+n = nrow(datos)
 
 # Elegimos de manera aleatoria los indices de la datos, asignando el 70% de los indices a los datos de entrenamiento, el 15% a datos de validación y 15% a datos de testeo
 
-train_indices <- sample(1:n, size = 0.7 * n)
-remaining_indices <- setdiff(1:n, train_indices)
-val_indices <- sample(remaining_indices, size = 0.15 * n)
-test_indices <- setdiff(remaining_indices, val_indices)
+train_indices = sample(1:n, size = 0.7 * n)
+remaining_indices = setdiff(1:n, train_indices)
+val_indices = sample(remaining_indices, size = 0.15 * n)
+test_indices = setdiff(remaining_indices, val_indices)
 
 # Ahora creamos los datasets de train, validation y test, aleatorios, basados en los indices creados
 
-train_set <- datos[train_indices, ]
-val_set <- datos[val_indices, ]
-test_set <- datos[test_indices, ]
+train_set = datos[train_indices, ]
+val_set = datos[val_indices, ]
+test_set = datos[test_indices, ]
 test_set_arbol = datos[test_indices, ]
 ```
 
 
 ### **Árbol de decisión**
 
-Para empezar a experimentar con nuestro modelo, creamos un árbol de decisión básico con los híper-parámetros que vienen por defecto para analizar el peso de las variables y tener una referencia de que tan bien o mal predice nuestro modelo. Usamos el set de datos *train_set* para entrenar al modelo y luego usaremos el *val_set* para validar al mismo.
+Para empezar a experimentar con nuestro modelo, creamos un árbol de decisión básico con los hiperparametros que vienen por defecto para analizar el peso de las variables y tener una referencia de que tan bien o mal predice nuestro modelo. Usamos el set de datos *train_set* para entrenar al modelo y luego usaremos el *val_set* para validar al mismo.
 
 ```{r}
 library(rpart)
@@ -174,7 +177,7 @@ library(rpart.plot)
 arbol = rpart(formula = popularity ~ ., data = train_set, method = "class")
 
 # Calculamos la media del set de entrenamiento
-mean_popularity_train_set <- mean(train_set$popularity, na.rm = TRUE)
+mean_popularity_train_set = mean(train_set$popularity, na.rm = TRUE)
 print(mean_popularity_train_set)
 
 rpart.plot(arbol, box.palette = "orange")
@@ -185,15 +188,15 @@ print(rpart.control())
 ###*Análisis de la estructura del arbol*
 En el nodo raíz, podemos observar que la probabilidad inicial de que una canción sea popular es del 51%, lo cual tiene sentido ya que, en este punto, el modelo no conoce nada sobre la canción. Por lo tanto, esta probabilidad debería coincidir con la media de popularity en el conjunto de entrenamiento, que es efectivamente del 51%.
 
-El modelo selecciona la variable instrumentalness como primer filtro, estableciendo un umbral de 0.0051. De acuerdo con este umbral, el 36% del conjunto de entrenamiento tiene un valor de instrumentalness menor a 0.0051, para las cuales el árbol predice que no son populares. Por otro lado, para el 64% restante, el árbol realiza un segundo corte utilizando la variable speechiness, con un umbral de 0.57.
+El modelo selecciona la variable instrumentalness como primer filtro, estableciendo un umbral de 0.0013. De acuerdo con este umbral, el 39% del conjunto de entrenamiento tiene un valor de instrumentalness mayor a 0.0013, para las cuales el árbol predice que no son populares. Por otro lado, para el 67% restante, el árbol realiza un segundo corte utilizando la variable speechiness, con un umbral de 0.69.
 
-En este segundo corte, solo el 2% de las observaciones tiene un valor de speechiness mayor o igual a 0.57. Para estas observaciones, el árbol predice una probabilidad de popularidad del 63%. En cambio, si speechiness es menor a 0.57, el árbol realiza un tercer corte utilizando la variable acousticness con un umbral de 0.92.
+En este segundo corte, el árbol predice una probabilidad de popularidad del 57%. Vemos que solo el 1% de las observaciones tiene un valor de speechiness mayor o igual a 0.69. Sí esta condicion no se cumple, el árbol realiza un tercer corte utilizando la variable energy con un umbral de 0.95.
 
-Si acousticness es mayor o igual a 0.92, el árbol predice que la canción no es popular con una probabilidad del 27%. Si acousticness es menor a 0.92, se realiza un cuarto corte utilizando la variable energy, con un umbral de 0.93.
+Si energy es mayor o igual a 0.95, el árbol predice que la canción no es popular con una probabilidad del 37%. Si es menor, se realiza un cuarto corte utilizando la variable acousticness, con un umbral de 0.92.
 
-En canciones con energy mayor o igual a 0.93, la probabilidad de popularidad es del 62%, aplicando esta predicción al 54% de las observaciones restantes. Si energy es menor a 0.93, la probabilidad de popularidad es del 42%, aplicando esta predicción al 7% de las observaciones.
+En canciones con acousticness mayor o igual a 0.92, el modelo predice con una probabilidad del 29% que esas canciones no son populares. Por otro lado, si dicho valor es menor al umbral, entonces el modelo predice que la cancion si es popular con una probabilidad del 61%
 
-En cuánto a las variables de los cortes que realiza el árbol, instrumentalness es el primer y más importante corte, lo que sugiere que la presencia o ausencia de contenido instrumental es un factor clave en la determinación de la popularidad de una canción.Speechiness aparece como la siguiente variable más relevante, indicando que el contenido hablado también impacta significativamente en la predicción de popularidad.
+En cuánto a las variables de los cortes que realiza el árbol, instrumentalness es el primer y más importante corte, lo que sugiere que la presencia o ausencia de contenido instrumental es un factor clave en la determinación de la popularidad de una canción. Speechiness aparece como la siguiente variable más relevante, indicando que el contenido hablado también impacta significativamente en la predicción de popularidad. Le siguen energy y acouscticness siguiendo la misma logica.
 
 Como forma de conclusión, el árbol de decisión ha aprendido a identificar ciertos patrones en los datos, y estos cortes representan las reglas que el modelo utiliza para clasificar las canciones como populares o no. La estructura del árbol sugiere que las canciones con baja instrumentalness y speechiness tienden a no ser populares, mientras que altos valores en estas y otras variables, como acousticness y energy, aumentan la probabilidad de que una canción sea popular.
 
@@ -232,16 +235,16 @@ Los hiperparámetros más relevantes y su valor por defecto en rpart son:
 ```{r}
 
 # Predicciones de clase
-predictions_class <- predict(arbol, newdata = test_set, type = "class")
+predictions_class = predict(arbol, newdata = test_set, type = "class")
 
 # Agregar las predicciones de clase al conjunto de datos
-test_set$predicted_class_popularity <- predictions_class
+test_set$predicted_class_popularity = predictions_class
 
 # Predicciones de probabilidades
-predictions_prob <- predict(arbol, newdata = test_set, type = "prob")
+predictions_prob = predict(arbol, newdata = test_set, type = "prob")
 
 # Agregar las predicciones de probabilidades al conjunto de datos
-test_set$predicted_prob_popularity <- predictions_prob
+test_set$predicted_prob_popularity = predictions_prob
 
 message("Columnas 'predicted_class_popularity' y 'predicted_prob_popularity' agregadas exitosamente al dataset.")
 
@@ -262,8 +265,8 @@ library(pheatmap)
 
 generar_matriz_confusion = function(clase_real, clase_predicha){
   # Convertir las columnas a factores con los mismos niveles
-  clase_real_factor <- factor(clase_real, levels = c(0, 1))
-  clase_predicha_factor <- factor(clase_predicha, levels = c(0, 1))
+  clase_real_factor = factor(clase_real, levels = c(0, 1))
+  clase_predicha_factor = factor(clase_predicha, levels = c(0, 1))
   
   # Calcular la matriz de confusión
   matriz_confusion = confusionMatrix(clase_predicha_factor, clase_real_factor)
@@ -272,14 +275,14 @@ generar_matriz_confusion = function(clase_real, clase_predicha){
   cm = matriz_confusion$table
   
   # Calcular las longitudes positivas y negativas
-  positive_len <- sum(clase_real == 1)
-  negative_len <- sum(clase_real == 0)
+  positive_len = sum(clase_real == 1)
+  negative_len = sum(clase_real == 0)
   
   # Normalizar la matriz de confusión
-  cm[1, 1] <- cm[1, 1] / negative_len
-  cm[1, 2] <- cm[1, 2] / positive_len
-  cm[2, 1] <- cm[2, 1] / negative_len
-  cm[2, 2] <- cm[2, 2] / positive_len
+  cm[1, 1] = cm[1, 1] / negative_len
+  cm[1, 2] = cm[1, 2] / positive_len
+  cm[2, 1] = cm[2, 1] / negative_len
+  cm[2, 2] = cm[2, 2] / positive_len
   
   pheatmap(cm,
            display_numbers = TRUE,
@@ -300,43 +303,43 @@ matriz_de_confusion = generar_matriz_confusion(test_set$popularity, test_set$pre
 
 
 A partir de la matriz de confusión podemos determinar: 
-  - *TP*: 0.62 -> Proporción de verdaderos positivos en relación con el total de verdaderos positivos.
-  - *TN*: 0.58 -> Proporción de verdaderos negativos en relación con el total de verdaderos negativos.
-  - *FP*: 0.38 -> Proporción de falsos positivos en relación con el total de verdaderos negativos.
-  - *FN*: 0.42 -> Proporción de falsos negativos en relación con el total de verdaderos positivos.
+  - *TP*: 0.71 -> Proporción de verdaderos positivos en relación con el total de verdaderos positivos.
+  - *TN*: 0.53 -> Proporción de verdaderos negativos en relación con el total de verdaderos negativos.
+  - *FP*: 0.29 -> Proporción de falsos positivos en relación con el total de verdaderos negativos.
+  - *FN*: 0.47 -> Proporción de falsos negativos en relación con el total de verdaderos positivos.
   
   
 ##*Accuracy*
 ```{r}
-accuracy <- matriz_de_confusion$overall['Accuracy']
+accuracy = matriz_de_confusion$overall['Accuracy']
 print(accuracy)
 ```
 
-El modelo tiene una tasa de *accuracy* del 60.26%. Esta métrica indica que el modelo clasifica correctamente el 60.26% de las observaciones en el conjunto de datos. Esto significa que aproximadamente 6 de cada 10 predicciones realizadas por el modelo son correctas.
+El modelo tiene una tasa de *accuracy* del 62.13%. Esta métrica indica que el modelo clasifica correctamente el 60.26% de las observaciones en el conjunto de datos. Esto significa que aproximadamente 6 de cada 10 predicciones realizadas por el modelo son correctas.
 
 
 ##*Precision y recall*
 ```{r}
-precision <- matriz_de_confusion$byClass['Precision']
-recall <- matriz_de_confusion$byClass['Recall']
+precision = matriz_de_confusion$byClass['Precision']
+recall = matriz_de_confusion$byClass['Recall']
 
 print(precision)
 cat("\n")
 print(recall)
 ```
 
-Un valor de *precisión* de 0.59 (o 59%) indica que cuando el modelo predice la clase positiva, el 60% de estas predicciones son correctas. En otras palabras, de todas las predicciones realizadas como positivas, el 59% de ellas son realmente correctas. Este valor sugiere que el modelo tiene un desempeño moderado en términos de evitar falsos positivos, es decir, hay margen de mejora para minimizar los errores en los casos en que predice la clase positiva.
+Un valor de *precisión* de 0.62 (o 62%) indica que cuando el modelo predice la clase positiva, el 62% de estas predicciones son correctas. En otras palabras, de todas las predicciones realizadas como positivas, el 62% de ellas son realmente correctas. Este valor sugiere que el modelo tiene un desempeño moderado en términos de evitar falsos positivos, es decir, hay margen de mejora para minimizar los errores en los casos en que predice la clase positiva.
 
-Un valor de *recall* de 0.58 (o 58%) indica que el modelo ha identificado correctamente el 58% de los verdaderos positivos. En otras palabras, de todos los casos que realmente pertenecen a la clase positiva, el modelo ha detectado el 58% de ellos. Aunque el valor de recall es razonablemente alto, un 42% de los verdaderos positivos no están siendo identificados por el modelo, lo que sugiere que hay espacio para mejorar la capacidad del modelo para detectar la clase positiva.
+Un valor de *recall* de 0.53 (o 53%) indica que el modelo ha identificado correctamente el 53% de los verdaderos positivos. En otras palabras, de todos los casos que realmente pertenecen a la clase positiva, el modelo ha detectado el 53% de ellos. Aunque el valor de recall es razonablemente alto, un 47% de los verdaderos positivos no están siendo identificados por el modelo, lo que sugiere que hay espacio para mejorar la capacidad del modelo para detectar la clase positiva.
 
 
 ##*F1 - score*
 ```{r}
-f1_score <- matriz_de_confusion$byClass['F1']
+f1_score = matriz_de_confusion$byClass['F1']
 print(f1_score)
 ```
 
-Un valor de F1 Score de 0.58 (o 58%) indica el equilibrio entre la precisión y el recall del modelo. En este caso, un valor de 0.58 sugiere que el modelo tiene un rendimiento moderado en términos de equilibrio entre evitar falsos positivos (precisión) y detectar verdaderos positivos (recall). Un F1 Score de 0.58 datos que el modelo tiene margen de mejora para aumentar tanto la precisión como el recall, y así lograr un mejor rendimiento general.
+Un valor de F1 Score de 0.57 (o 57%) indica el equilibrio entre la precisión y el recall del modelo. En este caso, un valor de 0.57 sugiere que el modelo tiene un rendimiento moderado en términos de equilibrio entre evitar falsos positivos (precisión) y detectar verdaderos positivos (recall). Un F1 Score de 0.57 datos que el modelo tiene margen de mejora para aumentar tanto la precisión como el recall, y así lograr un mejor rendimiento general.
 
 
 ##*AUC-ROC*
@@ -348,7 +351,7 @@ curva_AUC_ROC = function(clase_predicha, clase_real) {
   curva_roc = roc(clase_real, vector_predicciones)
   
   # Extraer el área bajo la curva (AUC)
-  auc_value <- auc(curva_roc)
+  auc_value = auc(curva_roc)
   
   # Imprimir solo el área bajo la curva (AUC)
   print(sprintf("Area bajo la curva de AUC-ROC: %f", auc_value))
@@ -359,18 +362,18 @@ curva_AUC_ROC = function(clase_predicha, clase_real) {
 curva_default = curva_AUC_ROC(test_set$predicted_class_popularity, test_set$popularity)[2]
 ```
 
-Un área bajo la curva de AUC-ROC de 0.60 (o 60%) indica el rendimiento general del modelo en términos de su capacidad para distinguir entre las clases positiva y negativa. Un AUC de 0.61 sugiere que el modelo tiene una capacidad de discriminación moderada. En otras palabras, el modelo tiene una probabilidad del 60% de clasificar correctamente una observación positiva por encima de una observación negativa al azar. 
+Un área bajo la curva de AUC-ROC de 0.61 (o 61%) indica el rendimiento general del modelo en términos de su capacidad para distinguir entre las clases positiva y negativa. Un AUC de 0.61 sugiere que el modelo tiene una capacidad de discriminación moderada. En otras palabras, el modelo tiene una probabilidad del 61% de clasificar correctamente una observación positiva por encima de una observación negativa al azar. 
 
 
 ### ***5. Optimización del modelo***
 
-Llegamos al momento en que tenemos que mejorar nuestro modelo, es decir, modificar los híper-parámetros que utiliza nuestro modelo para entrenarse, hasta encontrar el árbol que mejor resultados nos de. 
+Llegamos al momento en que tenemos que mejorar nuestro modelo, es decir, modificar los hiperparametros que utiliza nuestro modelo para entrenarse, hasta encontrar el árbol que mejor resultados nos de. 
 
-Para ello elegimos el método de optimización Bayesian Optimization. Este método elige puntos al azar (random search) para comenzar la búsqueda de los mejores híper-parámetros, y luego de ciertas iteraciones toma el mejor valor encontrado al azar y prueba con variaciones de los mejores híper-parámetros encontrados hasta encontrar uno mejor. Si bien tarda mucho tiempo, consideramos que es mas costo-efectivo que hacer grid-search o random-search.
+Para ello elegimos el método de optimización Bayesian Optimization. Este método elige puntos al azar (random search) para comenzar la búsqueda de los mejores hiperparametros, y luego de ciertas iteraciones toma el mejor valor encontrado al azar y prueba con variaciones de los mejores hiperparametros encontrados hasta encontrar uno mejor. Si bien tarda mucho tiempo, consideramos que es mas costo-efectivo que hacer grid-search o random-search.
 
-Bayesian optimization recibe una función que utiliza para determinar la performance de los híper-parámetros elegidos, y una lista de limites (bounds), de donde elegirá pseudo-aleatoriamente los mismos.
+Bayesian optimization recibe una función que utiliza para determinar la performance de los hiperparametros elegidos, y una lista de limites (bounds), de donde elegirá pseudo-aleatoriamente los mismos.
 
-Para este ejercicio, únicamente modificamos los híper-parámetros maxdepth, minsplit y minbucket, y dejamos fijos en 0 tanto a CP como a XVAL. El método elegido para determinar la performance de el árbol con esos híper-parámetros es AUC-ROC.
+Para este ejercicio, únicamente modificamos los hiperparametros maxdepth, minsplit y minbucket, y dejamos fijos en 0 tanto a CP como a XVAL. El método elegido para determinar la performance de el árbol con esos hiperparametros es AUC-ROC.
 
 ```{r}
 library(rBayesianOptimization)
@@ -379,8 +382,8 @@ library(pROC)
 library(ggplot2)
 
 # Función para evaluar el rendimiento del árbol, con dataset como parámetro
-evaluar_arbol <- function(maxdepth, minsplit, minbucket, training, validation) {
-  modelo <- rpart(
+evaluar_arbol = function(maxdepth, minsplit, minbucket, training, validation) {
+  modelo = rpart(
     formula = popularity ~ ., 
     data = training, 
     method = "class", 
@@ -392,23 +395,23 @@ evaluar_arbol <- function(maxdepth, minsplit, minbucket, training, validation) {
       xval = 0
     )
   )
-  predicciones <- predict(modelo, validation, type = "prob")[,2]
-  roc_curve <- roc(as.numeric(validation$popularity), predicciones)
-  auc_score <- auc(roc_curve)
+  predicciones = predict(modelo, validation, type = "prob")[,2]
+  roc_curve = roc(as.numeric(validation$popularity), predicciones)
+  auc_score = auc(roc_curve)
   
   # Devolver una lista con el campo Score
   return(list(Score = auc_score))
 }
 
 # Definir los límites de los hiperparámetros
-limites <- list(
+limites = list(
   maxdepth = c(1L, 30L), 
   minsplit = c(0L, 100L), 
   minbucket = c(1L, 10L)
 )
 
 # Ejecutar la optimización bayesiana
-result <- BayesianOptimization(
+result = BayesianOptimization(
   FUN = function(maxdepth, minsplit, minbucket) {
     evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set)
   },
@@ -428,14 +431,14 @@ graficar_performance = function(resultado){
 }
 
 # Extraer el historial de resultados
-result_data <- result$History
+result_data = result$History
 
 mejores_hiperparametros = result$Best_Par
 ```
 
-Una vez que ya determinamos la función que va a evaluar nuestro modelo y los límites por los que oscilaran nuestros híper-parámetros, podemos ejecutar la optimización.
+Una vez que ya determinamos la función que va a evaluar nuestro modelo y los límites por los que oscilaran nuestros hiperparametros, podemos ejecutar la optimización.
 
-Una vez que ya obtuvimos el modelo con mejor resultado, podemos guardarnos estos en una variable para utilizarlos a futuro cuando querramos entrenar un modelo con estos híper-parámetros y evaluarlo con el test_set.
+Obtenido el mejor resultado del modelo, podemos guardarnos estos en una variable para utilizarlos a futuro cuando querramos entrenar un modelo con estos hiperparametros y evaluarlo con el test_set.
 
 Por otro lado, graficamos la performance junto con las iteraciones de la optimización, para ver si hay algun valor donde el modelo converge.
 
@@ -443,14 +446,61 @@ Por otro lado, graficamos la performance junto con las iteraciones de la optimiz
 graficar_performance(result_data)
 ```
 
-Ahora, podemos analizar como se relacionan los híper-parámetros con la performance obtenida de disintas maneras. Elegimos distintas maneras de visualizar estas relaciones.
+Ahora, podemos analizar como se relacionan los hiperparametros con la performance obtenida de disintas maneras. Elegimos distintas maneras de visualizar estas relaciones.
 
 ```{r}
+# Gráfico 1: Relación entre maxdepth y AUC-ROC
+ggplot(result_data, aes(x = maxdepth, y = Value)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "loess", color = "blue") +
+  labs(title = "Relación entre maxdepth y AUC-ROC",
+       x = "maxdepth",
+       y = "AUC-ROC") +
+  theme_minimal()
 
+# Gráfico 2: Relación entre minsplit y AUC-ROC
+ggplot(result_data, aes(x = minsplit, y = Value)) +
+  geom_point(color = "red") +
+  geom_smooth(method = "loess", color = "red") +
+  labs(title = "Relación entre minsplit y AUC-ROC",
+       x = "minsplit",
+       y = "AUC-ROC") +
+  theme_minimal()
+
+# Gráfico 3: Relación entre minbucket y AUC-ROC
+ggplot(result_data, aes(x = minbucket, y = Value)) +
+  geom_point(color = "green") +
+  geom_smooth(method = "loess", color = "green") +
+  labs(title = "Relación entre minbucket y AUC-ROC",
+       x = "minbucket",
+       y = "AUC-ROC") +
+  theme_minimal()
 
 ```
+Aclaración: La banda gris en las visualizaciones representa el intervalo de confianza alrededor de la línea azul que muestra la tendencia promedio de la relación entre el hiperparámetro y el AUC-ROC.
 
-Ya tenemos los mejores híper-parámetros guardados en una variable, por lo que podemos entrenar un modelo con estos, calcular su performance midiendo el valor de AUC-ROC en el test_set.
+
+*Relación: max_depth y AUC-ROC*
+Observamos una relación no lineal entre max_depth y AUC-ROC. A medida que aumenta maxdepth de 0 a aproximadamente 10, el AUC-ROC también aumenta, lo que indica que el desempeño del modelo mejora hasta un maxdepth = 10 a 12, lo que sugiere que esta podría ser la configuración óptima para el hiperparámetro.
+
+Después del punto máximo, vemos una disminución en AUC-ROC a medida que maxdepth aumenta aún más. Este comportamiento podría indicar overfitting, donde el modelo se ajusta demasiado a los datos de entrenamiento y no generaliza bien en datos no vistos.
+
+A partir de maxdepth alrededor de 25, hay un ligero aumento en el AUC-ROC. Esto podría indicar que, para ciertas configuraciones de modelos o conjuntos de datos, profundidades mayores podrían tener un ligero beneficio, aunque no tan significativo como en el rango óptimo identificado anteriormente.
+
+
+*Relación: min_split y AUC-ROC*
+A medida que el valor de min_split aumenta, también lo hace el AUC-ROC, tiende a mejorar el desempeño del modelo en términos de AUC-ROC y puede tener un efecto de regularización en el modelo. Esto impide que el modelo se ajuste demasiado a los datos de entrenamiento (overfitting) al evitar divisiones en nodos que contengan muy pocas observaciones.
+
+La banda de confianza (zona sombreada alrededor de la línea azul) parece reducirse a medida que min_split aumenta, lo que indica una menor variabilidad en el rendimiento del modelo para valores más altos de min_split Indicando que el modelo es más estable y menos propenso a cambios bruscos en rendimiento.
+
+Aunque hay una mejora en AUC-ROC al incrementar min_split, esta mejora parece moderarse al acercarse a valores de min_split alrededor de 75-100, donde la curva se aplana, los beneficios adicionales de incrementar aún más min_split pueden ser marginales.
+
+
+*Relación: min_bucket y AUC-ROC*
+Establecer un min_bucket más alto generalmente mejora el rendimiento del modelo al incrementar el AUC-ROC y al reducir la variabilidad en el rendimiento, sugiriendo una mayor robustez y menor riesgo de sobreajuste, teniendo en cuenta que primero hay un periodo de decrecimiento sostenido. A partir de aproximadamente un minbucket de 4, el AUC-ROC comienza a crecer de manera practicamente estricta consiguiendo una mejora en performance. 
+
+
+Ya tenemos los mejores hiperparametros guardados en una variable, por lo que podemos entrenar un modelo con estos, calcular su performance midiendo el valor de AUC-ROC en el test_set.
  
 ```{r}
 # Cargar las librerías necesarias
@@ -458,19 +508,19 @@ library(rpart)
 library(rpart.plot)
 
 
-maxdepth_optmizado <- mejores_hiperparametros["maxdepth"]
-minsplit_optmizado <- mejores_hiperparametros["minsplit"]
-minbucket_optimizado <- mejores_hiperparametros["minbucket"]
+maxdepth_optimizado = mejores_hiperparametros["maxdepth"]
+minsplit_optimizado = mejores_hiperparametros["minsplit"]
+minbucket_optimizado = mejores_hiperparametros["minbucket"]
 
 
 # Crear el modelo utilizando los hiperparámetros especificados
-mejor_arbol <- rpart(
+mejor_arbol = rpart(
   formula = popularity ~ ., 
   data = train_set, 
   method = "class", 
   control = rpart.control(
-    maxdepth = maxdepth_optmizado, 
-    minsplit = minsplit_optmizado, 
+    maxdepth = maxdepth_optimizado, 
+    minsplit = minsplit_optimizado, 
     minbucket = minbucket_optimizado,
     cp = 0,
     xval = 0
@@ -482,14 +532,16 @@ rpart.plot(mejor_arbol, box.palette = "lightblue")
 print(mejor_arbol$control)
 ```
 
-Podemos ver que con el conjunto de testeo, nuestro modelo optimizado obtiene un puntaje AUC-ROC de 0.6769. Pero queremos comparar que tanto cambió nuestro modelo optimizado respecto al modelo inicial que calculamos, por lo que graficamos ambas curvas:
+
+Queremos comparar que tanto cambió nuestro modelo optimizado respecto al modelo inicial que calculamos, por lo que graficamos ambas curvas:
  
 ```{r}
 predicciones_modelo = predict(mejor_arbol, newdata = test_set, type = "prob")[,2]
 
 test_set$predicciones_optimas = predicciones_modelo
+test_set$predicciones_optimas = ifelse(test_set$predicciones_optimas >= 0.5, 1, 0)
 
-calculo_auc_roc <- curva_AUC_ROC(predicciones_modelo, test_set$popularity)
+calculo_auc_roc = curva_AUC_ROC(predicciones_modelo, test_set$popularity)
 
 curva_optimizada = calculo_auc_roc[2]
 auc_score_mejor_arbol = calculo_auc_roc[1]
@@ -505,44 +557,40 @@ lines(curva_optimizada$curva_roc, col = "red", lwd = 3)
 legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("lightblue", "red"), lwd = 3)
 
 ```
-
-Podemos ver una mejora en el modelo tanto visualmente en las curvas, como en los resultados del AUC-ROC, donde el primer modelo obtuve un valor AUC-ROC de tan solo 0.6225, mientras que nuestro modelo optimizado obtuvo un valor AUC-ROC de 0.6769, resultando en una mejora del 9%. 
-
+Podemos ver una mejora en el modelo tanto visualmente en las curvas, como en los resultados del AUC-ROC, donde el primer modelo obtuve un valor AUC-ROC de tan solo 0.61, mientras que nuestro modelo optimizado obtuvo un valor AUC-ROC de 0.682275, resultando en una mejora del 11%.
 
 ###***6. Interpretación de resultados***
  
- -> Presentar el árbol final, y detallar las diferencias entre el primero y el último
- 
-El árbol inicial es relativamente simple y tiene pocos niveles de profundidad. Habíamos observado que la primera división se realiza en la variable *instrumentalness* con un umbral de 0.0033.Posteriormente, se divide en *speechiness* y luego en *energy* y *acousticness.* Este árbol se enfoca principalmente en variables como instrumentalness, speechiness, energy, y acousticness para clasificar la popularidad.
+El árbol inicial es relativamente simple y tiene pocos niveles de profundidad. Habíamos observado que la primera división se realiza en la variable *instrumentalness* con un umbral de 0.0013.Posteriormente, se divide en *speechiness* y luego en *energy* y *acousticness*.
 
-En cambio, el árbol final es mucho más complejo y profundo, con múltiples niveles y nodos que abarcan una gran cantidad de variables. Muestra una mayor cantidad de divisiones y considera más combinaciones de variables para hacer la clasificación. A diferencia del árbol inicial, el árbol final toma en cuenta más variables y utiliza umbrales de clasificación más detallados y específicos.
+En cambio, el árbol final es mucho más complejo y profundo, con múltiples niveles y nodos que abarcan una gran cantidad de variables. Muestra una mayor cantidad de divisiones y considera más combinaciones de variables para hacer la clasificación. A diferencia del árbol inicial, el árbol final toma en cuenta más variables y utiliza umbrales de clasificación más detallados y específicos dado que tiene un *cp* de 0.
 
 Las diferencias claves entre ambos árboles son: 
-        - Complejidad: El árbol final es significativamente más complejo, con una estructura más detallada, lo que                sugiere que está ajustado para capturar más relaciones en los datos.
-        -Cantidad de Variables: El árbol final considera una mayor cantidad de variables y combinaciones en comparación           con el árbol inicial.
-        -Precisión: Es probable que el árbol final tenga un mejor rendimiento en términos de precisión debido a su                complejidad, pero esto también podría llevar a un mayor riesgo de sobreajuste si no se maneja adecuadamente.
+        - *Complejidad*: El árbol final es significativamente más complejo, con una estructura más detallada, lo que                sugiere que está ajustado para capturar más relaciones en los datos.
+        - *Cantidad de variables*: El árbol final considera una mayor cantidad de variables y combinaciones en                      comparación con el árbol inicial.
+        - *Precisión*: Es probable que el árbol final tenga un mejor rendimiento en términos de precisión debido a                  su complejidad, pero esto también podría llevar a un mayor riesgo de sobreajuste si no se maneja                    adecuadamente.
+
 ```{r}
 library(corrplot)
 
-datos_numerica <- datos
-datos_numerica$popularity <- as.numeric(as.character(datos_numerica$popularity))
+datos_numerica = datos
+datos_numerica$popularity = as.numeric(datos$popularity)
 
-  
-
-numeric_data <- datos_numerica[, c('popularity', 'duration_min', 'explicit', 'danceability', 
-                                  'energy', 'key', 'loudness', 'mode', 
+# Excluir 'key' y 'time_signature' de 'numeric_data'
+numeric_data = datos_numerica[, c('popularity', 'duration_min', 'explicit', 'danceability', 
+                                  'energy', 'loudness', 'mode', 
                                   'speechiness', 'acousticness', 
                                   'instrumentalness', 'liveness', 
-                                  'valence', 'tempo', 'time_signature')]
-
+                                  'valence', 'tempo')]
 
 # Calcular la matriz de correlación
-cor_matrix <- cor(numeric_data, use = "complete.obs")
+cor_matrix = cor(numeric_data, use = "complete.obs")
 
 # Mostrar la matriz de correlación
 print(cor_matrix)
 
-color_pal <- colorRampPalette(c("#081D59", "white", "#FD0604"))(200)
+# Definir la paleta de colores para corrplot
+color_pal = colorRampPalette(c("#081D59", "white", "#FD0604"))(200)
 
 # Visualizar la matriz de correlación usando corrplot
 corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", 
@@ -551,13 +599,13 @@ corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black",
 ```
 De acuerdo con el árbol final y la matriz de correlación, las variables más importantes son:
 
-    -*instrumentalness*: Esta variable fue la primera en dividir el árbol inicial y también aparece en el árbol final,        lo que sugiere que es una de las variables más influyentes en la clasificación de la popularidad. La correlación        negativa con la popularidad (-0.1507) indica que a medida que aumenta la instrumentalness, la popularidad tiende a       disminuir.
+    -*instrumentalness*: Esta variable fue la primera en dividir el árbol inicial y también aparece en el árbol             final, lo que sugiere que es una de las variables más influyentes en la clasificación de la popularidad. La         correlación negativa con la popularidad (-0.15068865) indica que a medida que aumenta la instrumentalness,          la popularidad tiende a disminuir.
     
-    -*speechiness*: También es una variable clave que se utiliza en las primeras divisiones del árbol inicial. Aunque         tiene una correlación negativa débil con la popularidad (-0.1036), su importancia en la estructura del árbol            indica que es relevante para la clasificación.
+    -*speechiness*: También es una variable clave que se utiliza en las primeras divisiones del árbol inicial.              Aunque tiene una correlación negativa débil con la popularidad (-0.10361943), su importancia en la                  estructura del árbol indica que es relevante para la clasificación.
     
-    -*energy*: Aparece tanto en el árbol inicial como en el final. Tiene una correlación cercana a cero con la                popularidad (-0.0301), pero su aparición en el árbol sugiere que, en combinación con otras variables, juega un          papel en la predicción.
+    -*energy*: Aparece tanto en el árbol inicial como en el final. Tiene una correlación cercana a cero con la              popularidad (-0.03011147), pero su aparición en el árbol sugiere que, en combinación con otras variables,           juega un papel en la predicción.
     
-    -*acousticness*: Se encuentra en ambos árboles, y su correlación negativa con la popularidad (-0.0035) es baja, pero        puede ser un factor determinante cuando se combina con otras variables en el árbol.
+    -*acousticness*: Se encuentra en ambos árboles, y su correlación negativa con la popularidad (-0.003469163) es          baja, pero puede ser un factor determinante cuando se combina con otras variables en el árbol.
     
 
 ###***7. Análisis del impacto de los valores faltantes***
@@ -568,13 +616,13 @@ Para ello, nos creamos 9 datasets nuevos, cada uno con una cantidad distinta de 
  
 ```{r}
 # Función para reemplazar cierto porcentaje de valores al azar con NA
-reemplazar_con_na <- function(dataset, porcentaje) {
-  datos_na <- dataset
+reemplazar_con_na = function(dataset, porcentaje) {
+  datos_na = dataset
   for (columna in names(datos_na)) {
     if (is.numeric(datos_na[[columna]]))  {
-      cantidad_na <- round(porcentaje * nrow(datos_na))
-      indices <- sample(1:nrow(datos_na), cantidad_na)
-      datos_na[indices, columna] <- NA
+      cantidad_na = round(porcentaje * nrow(datos_na))
+      indices = sample(1:nrow(datos_na), cantidad_na)
+      datos_na[indices, columna] = NA
     }
   }
   return(datos_na)
@@ -584,25 +632,25 @@ reemplazar_con_na <- function(dataset, porcentaje) {
 
 ```{r}
 # Creación de los nueve datasets
-train_20_na <- reemplazar_con_na(train_set, 0.20)
-val_20_na <- reemplazar_con_na(val_set, 0.20)
-test_20_na <- reemplazar_con_na(test_set, 0.20)
+train_20_na = reemplazar_con_na(train_set, 0.20)
+val_20_na = reemplazar_con_na(val_set, 0.20)
+test_20_na = reemplazar_con_na(test_set, 0.20)
 
-train_50_na <- reemplazar_con_na(train_set, 0.50)
-val_50_na <- reemplazar_con_na(val_set, 0.50)
-test_50_na <- reemplazar_con_na(test_set, 0.50)
+train_50_na = reemplazar_con_na(train_set, 0.50)
+val_50_na = reemplazar_con_na(val_set, 0.50)
+test_50_na = reemplazar_con_na(test_set, 0.50)
 
-train_75_na <- reemplazar_con_na(train_set, 0.75)
-val_75_na <- reemplazar_con_na(val_set, 0.75)
-test_75_na <- reemplazar_con_na(test_set, 0.75)
+train_75_na = reemplazar_con_na(train_set, 0.75)
+val_75_na = reemplazar_con_na(val_set, 0.75)
+test_75_na = reemplazar_con_na(test_set, 0.75)
 ```
  
-Ahora vamos a entrenar 3 modelos nuevos, cada uno con su correspondiente cantidad faltante de datos. Reutilizamos el código ya creado en el ejercicio 5 para simplificar el código. Pero primero tenemos que encontrar los híper-parámetros que mejor performance dan en el dataset de validación.
+Ahora vamos a entrenar 3 modelos nuevos, cada uno con su correspondiente cantidad faltante de datos. Reutilizamos el código ya creado en el ejercicio 5 para simplificar el código. Pero primero tenemos que encontrar los hiperparametros que mejor performance dan en el dataset de validación.
 
 
 ```{r}
-optimizar_arbol <- function(set_entrenamiento, set_validacion, init_iter, normal_iter) {
-  arbol_optimizado <- BayesianOptimization(
+optimizar_arbol = function(set_entrenamiento, set_validacion, init_iter, normal_iter) {
+  arbol_optimizado = BayesianOptimization(
   FUN = function(maxdepth, minsplit, minbucket) {
     evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set)
   },
@@ -614,8 +662,8 @@ optimizar_arbol <- function(set_entrenamiento, set_validacion, init_iter, normal
   arbol_optimizado
 }
 
-crear_arbol <- function(depth, split, bucket){
-  nuevo_arbol <- rpart(
+crear_arbol = function(depth, split, bucket){
+  nuevo_arbol = rpart(
   formula = popularity ~ ., 
   data = train_20_na, 
   method = "class", 
@@ -634,44 +682,44 @@ crear_arbol <- function(depth, split, bucket){
 
 ```{r}
 
-# Buscamos híper-parámetros óptimos para:
+# Buscamos hiperparametros óptimos para:
 
 # 20% de los datos faltantes
 
-result_20_NA <- optimizar_arbol(train_20_na,val_20_na, 30,15)
+result_20_NA = optimizar_arbol(train_20_na,val_20_na, 30,15)
 
-result_data_20_NA <- result_20_NA$History
+result_data_20_NA = result_20_NA$History
 
-best_hiper_20 <- result_20_NA$Best_Par
+best_hiper_20 = result_20_NA$Best_Par
 
 # 50% de los datos faltantes
 
-result_50_NA <- optimizar_arbol(train_50_na,val_50_na, 30,15)
+result_50_NA = optimizar_arbol(train_50_na,val_50_na, 30,15)
 
-result_data_50_NA <- result_50_NA$History
+result_data_50_NA = result_50_NA$History
 
-best_hiper_50 <- result_50_NA$Best_Par
+best_hiper_50 = result_50_NA$Best_Par
 
 # 75% de lo datos faltantes
 
-result_75_NA <- optimizar_arbol(train_75_na,val_75_na, 30,15)
+result_75_NA = optimizar_arbol(train_75_na,val_75_na, 30,15)
 
-result_data_75_NA <- result_75_NA$History
+result_data_75_NA = result_75_NA$History
 
-best_hiper_75 <- result_75_NA$Best_Par
+best_hiper_75 = result_75_NA$Best_Par
 
 ```
 
-Ya con los híper-parámetros correspondientes, podemos entrenar nuestros nuevos modelos.
+Ya con los hiperparametros correspondientes, podemos entrenar nuestros nuevos modelos.
 
 ```{r}
-# Ahora creamsos los 3 modelos utilizando los híper-parámetros encontrados
+# Ahora creamsos los 3 modelos utilizando los hiperparametros encontrados
 
-mejor_arbol_20_na <- crear_arbol(best_hiper_20[1],best_hiper_20[2],best_hiper_20[3])
+mejor_arbol_20_na = crear_arbol(best_hiper_20[1],best_hiper_20[2],best_hiper_20[3])
 
-mejor_arbol_50_na <- crear_arbol(best_hiper_50[1],best_hiper_50[2],best_hiper_50[3])
+mejor_arbol_50_na = crear_arbol(best_hiper_50[1],best_hiper_50[2],best_hiper_50[3])
 
-mejor_arbol_75_na <- crear_arbol(best_hiper_75[1],best_hiper_75[2],best_hiper_75[3])
+mejor_arbol_75_na = crear_arbol(best_hiper_75[1],best_hiper_75[2],best_hiper_75[3])
 
 ```
 
@@ -679,44 +727,44 @@ Luego de crear nuestros modelos óptimos, queremos predecir y medir el valor de 
 
 ```{r}
 
-predecir_y_calcular_score <- function(arbol, set_test) {
-  predicciones_modelo <- predict(arbol, newdata = set_test, type = "prob")[,2]
+predecir_y_calcular_score = function(arbol, set_test) {
+  predicciones_modelo = predict(arbol, newdata = set_test, type = "prob")[,2]
   
   set_test$predicciones_optimas = predicciones_modelo
-  set_test$predicciones_optimas <- ifelse(test_20_na$predicciones_optimas >= 0.5, 1, 0)
-  set_test$predicciones_optimas <- as.factor(test_20_na$predicciones_optimas)
+  set_test$predicciones_optimas = ifelse(set_test$predicciones_optimas >= 0.5, 1, 0)
+  set_test$predicciones_optimas = as.factor(set_test$predicciones_optimas)
   
-  curva_optimizada <- roc(set_test$popularity, predicciones_modelo)
+  curva_optimizada = roc(set_test$popularity, predicciones_modelo)
   
-  auc_score <- auc(curva_optimizada)
+  auc_score = auc(curva_optimizada)
   
   auc_score
 }
 
 # Predicciones y performance con el 20% de los datos faltantes
 
-auc_score_20_NA <- predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
+auc_score_20_NA = predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
 
-curva_roc_20_NA <- curva_AUC_ROC(test_20_na$predicted_class_popularity, test_20_na$popularity)
+curva_roc_20_NA = curva_AUC_ROC(test_20_na$predicted_class_popularity, test_20_na$popularity)
 
 # Predicciones y performance con el 50% de los datos faltantes
 
-auc_score_50_NA <- predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
+auc_score_50_NA = predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
 
-curva_roc_50_NA <- curva_AUC_ROC(test_50_na$predicted_class_popularity, test_50_na$popularity)
+curva_roc_50_NA = curva_AUC_ROC(test_50_na$predicted_class_popularity, test_50_na$popularity)
 
 # Predicciones y performance con el 75% de los datos faltantes
 
-auc_score_75_NA <- predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
+auc_score_75_NA = predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
 
-curva_roc_75_NA <- curva_AUC_ROC(test_75_na$predicted_class_popularity, test_75_na$popularity)
+curva_roc_75_NA = curva_AUC_ROC(test_75_na$predicted_class_popularity, test_75_na$popularity)
 
 ```
 
 Creamos la siguiente función para graficar y comparar curvas de ROC en los distintos modelos:
 
 ```{r}
-graficar_curvas_ROC <- function(curva_1, curva_2, titulo_1, titulo_2) {
+graficar_curvas_ROC = function(curva_1, curva_2, titulo_1, titulo_2) {
   
   # Graficar la primera curva
   plot(curva_1$curva_roc, col = "blue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
@@ -741,11 +789,11 @@ auc_score_mejor_arbol
 
 auc_score_20_NA
 
-graficar_curvas_ROC(curva_optimizada,curva_roc_20_NA, "Curva árbol 20 NA", "Curva árbol optimizado")
+graficar_curvas_ROC(curva_roc_20_NA, curva_optimizada, "Curva árbol 20% NA", "Curva árbol optimizado")
 
 ```
 
-Este modelo arrojo un resultado peor al mejor árbol, pero no tan alejado de el mismo, sin embargo, esto tiene sentido, ya que únicamente faltan el 20% de los datos con los que se entreno, valido y testeo el modelo inicial. Con el modelo original obtuvimos un valor AUC-ROC de 0.68, mientras que con el 20% de los datos faltantes obtuvimos uno de 0.646.
+Este modelo arrojo un resultado peor al mejor árbol, pero no tan alejado de el mismo, sin embargo, esto tiene sentido, ya que únicamente faltan el 20% de los datos con los que se entreno, valido y testeo el modelo inicial. Con el modelo original obtuvimos un valor AUC-ROC de 0.68, mientras que con el 20% de los datos faltantes obtuvimos uno de 0.6436.
 
 ```{r}
 
@@ -753,11 +801,11 @@ auc_score_mejor_arbol
 
 auc_score_50_NA
 
-graficar_curvas_ROC(curva_optimizada,curva_roc_50_NA, "Curva árbol 50 NA", "Curva árbol optimizado")
+graficar_curvas_ROC(curva_roc_50_NA, curva_optimizada, "Curva árbol 50% NA", "Curva árbol optimizado")
 
 ```
 
-Ahora el modelo con el 50% de los datos faltantes arroja un valor AUC-ROC aún peor que el anterior, de tan solo 0.608, no es extremadamente malo, pero ya no es tan efectivo como quizas el anterior. Tiene sentido este resultado, porque ahora el modelo se entrenó y validó con un 50% de datos menos que el mejor modelo.
+Ahora el modelo con el 50% de los datos faltantes arroja un valor AUC-ROC aún peor que el anterior, de tan solo 0.6104, no es extremadamente malo, pero ya no es tan efectivo como quizas el anterior. Tiene sentido este resultado, porque ahora el modelo se entrenó y validó con un 50% de datos menos que el mejor modelo.
 
 ```{r}
 
@@ -765,50 +813,37 @@ auc_score_mejor_arbol
 
 auc_score_75_NA
 
-graficar_curvas_ROC(curva_optimizada,curva_roc_75_NA, "Curva árbol 75 NA", "Curva árbol optimizado")
+graficar_curvas_ROC(curva_roc_75_NA, curva_optimizada, "Curva árbol 75 NA", "Curva árbol optimizado")
 
 ```
 
-Por último el modelo con el 75% de los datos faltantes. Es congruente que haya arrojado un valor inferior (de 0.57) al de 20% y 50% de datos faltantes, ya que en esta instancia el modelo se entrenó y validó con 1/4 del total de los datos que lo hizo el mejor modelo obtenido.
+Por último el modelo con el 75% de los datos faltantes. Es congruente que haya arrojado un valor inferior (de aproximadamente 0.57) al de 20% y 50% de datos faltantes, ya que en esta instancia el modelo se entrenó y validó con 1/4 del total de los datos que lo hizo el mejor modelo obtenido.
 
 Vemos que hay una clara correlacion negativa entre performance y cantidad de datos que utiliza el modelo para entrenar, validar y testear. A medida que aumenta la cantidad de información faltante, disminuye la performance del modelo. 
 
-Quisimos llevar mas allá la investigación con los datos faltantes, por lo que analizamos que parte de los datos faltantes hacían que el modelo arroje peores resultados. Por lo que tomamos los modelos pre entrenados con datos faltantes y los testeamos con el data set completo: 
+Quisimos llevar mas allá la investigación con los datos faltantes, por lo que analizamos si la causa de la reduccion de performance era haber entrenado con conjuntos de training con datos faltantes a los arboles o el haber testeado dichos arboles con conjuntos de test con datos faltantes, por lo que tomamos los modelos pre entrenados con datos faltantes y los testeamos con el conjunto de test original: 
 
 ```{r}
 
 auc_score_mejor_arbol
 
-score_modelo_20_NA_con_set_completo <- predecir_y_calcular_score(mejor_arbol_20_na,test_set)
+score_modelo_20_NA_con_set_completo = predecir_y_calcular_score(mejor_arbol_20_na,test_set)
 
-score_modelo_50_NA_con_set_completo <- predecir_y_calcular_score(mejor_arbol_50_na,test_set)
+score_modelo_50_NA_con_set_completo = predecir_y_calcular_score(mejor_arbol_50_na,test_set)
 
-score_modelo_75_NA_con_set_completo <- predecir_y_calcular_score(mejor_arbol_75_na,test_set)
+score_modelo_75_NA_con_set_completo = predecir_y_calcular_score(mejor_arbol_75_na,test_set)
 
-score_modelo_20_NA_con_set_completo
-
-score_modelo_50_NA_con_set_completo
-
-score_modelo_75_NA_con_set_completo
 ```
 
-Para nuestra sorpresa, descubirmos que cuando testeamos a los modelos entrenados con datos faltantes, con un set de datos completo, el score obtenido no es tan negativo e incluso no cambia mucho entre modelos. 
+Para nuestra sorpresa, descubrimos que cuando testeamos a los modelos entrenados con datos faltantes, con un set de datos completo, el score obtenido no es tan negativo e incluso no cambia mucho entre modelos. 
+
 
 ###***8. Conclusiones y discusión***
+Luego de entrenar el modelo optimizado, logramos predecir si una canción será popular (según el umbral definido por nosotros) utilizando únicamente las características disponibles en el dataset de Spotify. Aunque el modelo alcanzó un nivel de precisión de  alrededor de 0.63, los resultados no fueron tan satisfactorios como esperábamos. 
 
-Luego de entrenar el modelo optimizado, logramos predecir si una canción será popular (según el umbral definido por nosotros)
-utilizando únicamente las características disponibles en el dataset de Spotify. Aunque el modelo alcanzó un nivel de precisión
-de 0.837, los resultados no fueron tan satisfactorios como esperábamos. 
+Al mejorar el modelo mediante la optimización de los hiperparámetros, logramos incrementar el área bajo la curva AUC-ROC en aproximadamente un 11%. Esto se consiguió a través de una optimización bayesiana con 45 iteraciones (al hacer pruebas vimos que en alrededor de 30 iteraciones el valor maximo converge a un valor, por lo que fijamos la cantidad de iteraciones en un numero similar).
 
-Al mejorar el modelo mediante la optimización de los hiperparámetros, logramos incrementar el área bajo la curva AUC-ROC en
-aproximadamente un 10%. Esto se consiguió a través de una optimización bayesiana con 1000 iteraciones.
+En cuanto a la efectividad del árbol de decisión para este problema, esperábamos un rendimiento superior. Después de numerosos intentos de mejora, concluimos que la popularidad de una canción no parece estar fuertemente correlacionada con las variables presentes en el dataset. Además, es posible que el enfoque basado en modelos de árboles de decisión no sea el más adecuado para este tipo de datos.  
 
-En cuanto a la efectividad del árbol de decisión para este problema, esperábamos un rendimiento superior. Después de numerosos
-intentos de mejora, concluimos que la popularidad de una canción no parece estar fuertemente correlacionada con las variables
-presentes en el dataset. Además, es posible que el enfoque basado en modelos de árboles de decisión no sea el más adecuado
-para este tipo de datos.  
-
-Por lo tanto, sugerimos explorar otros tipos de modelos, como regresión logística, máquinas de vectores de soporte (SVM)
-o redes neuronales, que podrían ofrecer un mejor rendimiento en la predicción de la popularidad de canciones, dadas las
-características del dataset. Este cambio de enfoque podría mejorar considerablemente la precisión y la utilidad del modelo.
+Por lo tanto, sugerimos explorar otros tipos de modelos, como regresión logística, máquinas de vectores de soporte (SVM) o redes neuronales, que podrían ofrecer un mejor rendimiento en la predicción de la popularidad de canciones, dadas las características del dataset. Este cambio de enfoque podría mejorar considerablemente la precisión y la utilidad del modelo.
 
