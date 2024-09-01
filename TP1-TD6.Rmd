@@ -489,19 +489,21 @@ predicciones_modelo = predict(mejor_arbol, newdata = test_set, type = "prob")[,2
 
 test_set$predicciones_optimas = predicciones_modelo
 
-curva_AUC_ROC(predicciones_modelo, test_set$popularity)
+calculo_auc_roc <- curva_AUC_ROC(predicciones_modelo, test_set$popularity)
 
-curva_optimizada = curva_AUC_ROC(predicciones_modelo, test_set$popularity)[2]
-auc_score_mejor_arbol = curva_AUC_ROC(predicciones_modelo, test_set$popularity)[1]
+curva_optimizada = calculo_auc_roc[2]
+auc_score_mejor_arbol = calculo_auc_roc[1]
+
 
 # Graficar la primera curva
-plot(curva_default, col = "lightblue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+plot(curva_default$curva_roc, col = "lightblue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
 
 # Añadir la segunda curva al mismo gráfico
-lines(curva_optimizada, col = "red", lwd = 3)
+lines(curva_optimizada$curva_roc, col = "red", lwd = 3)
 
 # Añadir una leyenda para diferenciar las curvas
 legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("lightblue", "red"), lwd = 3)
+
 ```
 
 Podemos ver una mejora en el modelo tanto visualmente en las curvas, como en los resultados del AUC-ROC, donde el primer modelo obtuve un valor AUC-ROC de tan solo 0.6225, mientras que nuestro modelo optimizado obtuvo un valor AUC-ROC de 0.6769, resultando en una mejora del 9%. 
@@ -687,17 +689,49 @@ predecir_y_calcular_score <- function(arbol, set_test) {
   curva_optimizada <- roc(set_test$popularity, predicciones_modelo)
   
   auc_score <- auc(curva_optimizada)
+  
   auc_score
 }
 
+# Predicciones y performance con el 20% de los datos faltantes
 
-score_modelo_20_NA <- predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
+auc_score_20_NA <- predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
 
-score_modelo_50_NA <- predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
+curva_roc_20_NA <- curva_AUC_ROC(test_20_na$predicted_class_popularity, test_20_na$popularity)
 
-score_modelo_75_NA <- predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
+# Predicciones y performance con el 50% de los datos faltantes
+
+auc_score_50_NA <- predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
+
+curva_roc_50_NA <- curva_AUC_ROC(test_50_na$predicted_class_popularity, test_50_na$popularity)
+
+# Predicciones y performance con el 75% de los datos faltantes
+
+auc_score_75_NA <- predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
+
+curva_roc_75_NA <- curva_AUC_ROC(test_75_na$predicted_class_popularity, test_75_na$popularity)
 
 ```
+
+Creamos la siguiente función para graficar y comparar curvas de ROC en los distintos modelos:
+
+```{r}
+graficar_curvas_ROC <- function(curva_1, curva_2, titulo_1, titulo_2) {
+  
+  # Graficar la primera curva
+  plot(curva_1$curva_roc, col = "blue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+  
+  # Añadir la segunda curva al mismo gráfico
+  lines(curva_2$curva_roc, col = "red", lwd = 3)
+  
+  # Añadir una leyenda para diferenciar las curvas
+  legend("bottomright", legend = c(titulo_1, titulo_2), col = c("blue", "red"), lwd = 3)
+  
+  
+}
+
+```
+
 
 Ya con todos los resultados obtenidos, podemos comparar el rendimiento de nuestro mejor modelo obtenido y nuestros nuevos modelos obtenidos con datos faltantes en el dataset. Analicemos uno por uno:
 
@@ -705,7 +739,9 @@ Ya con todos los resultados obtenidos, podemos comparar el rendimiento de nuestr
 
 auc_score_mejor_arbol
 
-score_modelo_20_NA
+auc_score_20_NA
+
+graficar_curvas_ROC(curva_optimizada,curva_roc_20_NA, "Curva árbol 20 NA", "Curva árbol optimizado")
 
 ```
 
@@ -715,7 +751,9 @@ Este modelo arrojo un resultado peor al mejor árbol, pero no tan alejado de el 
 
 auc_score_mejor_arbol
 
-score_modelo_50_NA
+auc_score_50_NA
+
+graficar_curvas_ROC(curva_optimizada,curva_roc_50_NA, "Curva árbol 50 NA", "Curva árbol optimizado")
 
 ```
 
@@ -725,7 +763,9 @@ Ahora el modelo con el 50% de los datos faltantes arroja un valor AUC-ROC aún p
 
 auc_score_mejor_arbol
 
-score_modelo_75_NA
+auc_score_75_NA
+
+graficar_curvas_ROC(curva_optimizada,curva_roc_75_NA, "Curva árbol 75 NA", "Curva árbol optimizado")
 
 ```
 
@@ -753,132 +793,6 @@ score_modelo_75_NA_con_set_completo
 ```
 
 Para nuestra sorpresa, descubirmos que cuando testeamos a los modelos entrenados con datos faltantes, con un set de datos completo, el score obtenido no es tan negativo e incluso no cambia mucho entre modelos. 
-
-###***7. Análisis del impacto de los valores faltantes***
- 
- -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras.     En el primero 20%, el segundo 50% y el tercero 75%
- 
-```{r}
-# Función para reemplazar un porcentaje de valores al azar con NA
-reemplazar_con_na <- function(dataset, porcentaje) {
-  datos_na <- dataset
-  for (columna in names(datos_na)) {
-    if (is.numeric(datos_na[[columna]]))  {
-      cantidad_na <- round(porcentaje * nrow(datos_na))
-      indices <- sample(1:nrow(datos_na), cantidad_na)
-      datos_na[indices, columna] <- NA
-    }
-  }
-  return(datos_na)
-}
-
-# Creación de los tres sets
-train_20_na <- reemplazar_con_na(train_set, 0.20)
-val_20_na <- reemplazar_con_na(val_set, 0.20)
-test_20_na <- reemplazar_con_na(test_set, 0.20)
-
-train_50_na <- reemplazar_con_na(train_set, 0.50)
-val_50_na <- reemplazar_con_na(val_set, 0.50)
-test_50_na <- reemplazar_con_na(test_set, 0.50)
-
-train_75_na <- reemplazar_con_na(train_set, 0.75)
-val_75_na <- reemplazar_con_na(val_set, 0.75)
-test_75_na <- reemplazar_con_na(test_set, 0.75)
-```
- 
- -> Para cada dataset creamos un nuevo árbol optimizado (elegir hiperparam. que maximicen)
-    Comparar el mejor árbol obtenido antes, con los 3 nuevos árboles
-    
-
-```{r}
-
-# Ejecutar la optimización bayesiana
-result_20_NA <- BayesianOptimization(
-  FUN = function(maxdepth, minsplit, minbucket) {
-    evaluar_arbol(maxdepth, minsplit, minbucket, train_20_na, val_20_na)
-  },
-  bounds = limites,
-  init_points = 5,
-  n_iter = 10,
-)
-result_data_20_NA <- result_20_NA$History
-
-graficar_performance(result_data_20_NA)
-
-```
-```{r}
-# Crear el modelo utilizando los hiperparámetros especificados
-mejor_arbol_20_na <- rpart(
-  formula = popularity ~ ., 
-  data = train_20_na, 
-  method = "class", 
-  control = rpart.control(
-    maxdepth = 17, 
-    minsplit = 71, 
-    minbucket = 7,
-    cp = 0,
-    xval = 0
-  )
-)
-
-# Graficar el árbol utilizando rpart.plot
-rpart.plot(mejor_arbol_20_na, box.palette = "violet")
-print(mejor_arbol_20_na$control)
-```
-
-```{r}
-predicciones_modelo_20_na = predict(mejor_arbol_20_na, newdata = test_20_na, type = "prob")[,2]
-
-test_20_na$predicciones_optimas_20_na = predicciones_modelo_20_na
-test_20_na$predicciones_optimas_20_na <- ifelse(test_20_na$predicciones_optimas_20_na >= 0.5, 1, 0)
-test_20_na$predicciones_optimas_20_na <- as.factor(test_20_na$predicciones_optimas_20_na)
-
-curva_optimizada_20_na <- roc(test_20_na$popularity, predicciones_modelo_20_na)
-
-auc_score_mejor_arbol_20_na <- auc(curva_optimizada_20_na)
-auc_score_mejor_arbol_20_na
-```
-
-
-```{r}
-# Ejecutar la optimización bayesiana
-result_50_NA <- BayesianOptimization(
-  FUN = function(maxdepth, minsplit, minbucket) {
-    evaluar_arbol(maxdepth, minsplit, minbucket, train_50_na, val_50_na)
-  },
-  bounds = limites,
-  init_points = 5,
-  n_iter = 10,
-)
-
-result_data_50_NA <- result_50_NA$History
-
-graficar_performance(result_data_50_NA)
-
-```
-
-
-```{r}
-# Ejecutar la optimización bayesiana
-result_75_NA <- BayesianOptimization(
-  FUN = function(maxdepth, minsplit, minbucket) {
-    evaluar_arbol(maxdepth, minsplit, minbucket, train_75_na, val_75_na)
-  },
-  bounds = limites,
-  init_points = 5,
-  n_iter = 10,
-)
-
-result_data_75_NA <- result_75_NA$History
-
-graficar_performance(result_data_75_NA)
-
-```
-
-    
-  -> Analizar como cambia el rendimiento del modelo a medida que aumenta la cantidad de NAs (Recomiendan fuertemente usar gráficos)
-  
-  [ACA]
 
 ###***8. Conclusiones y discusión***
 
