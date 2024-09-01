@@ -839,7 +839,7 @@ Para nuestra sorpresa, descubrimos que cuando testeamos a los modelos entrenados
 
 
 ###***8. Conclusiones y discusión***
-Luego de entrenar el modelo optimizado, logramos predecir si una canción será popular (según el umbral definido por nosotros) utilizando únicamente las características disponibles en el dataset de Spotify. Aunque el modelo alcanzó un nivel de precisión de  alrededor de 0.63, los resultados no fueron tan satisfactorios como esperábamos. 
+Luego de entrenar el modelo optimizado, logramos predecir si una canción será popular (según el umbral definido por nosotros) utilizando únicamente las características disponibles en el dataset de Spotify. Si bien logramos mejorar la performance del modelo , los resultados obtenidos no fueron tan satisfactorios como esperábamos, 
 
 Al mejorar el modelo mediante la optimización de los hiperparámetros, logramos incrementar el área bajo la curva AUC-ROC en aproximadamente un 11%. Esto se consiguió a través de una optimización bayesiana con 45 iteraciones (al hacer pruebas vimos que en alrededor de 30 iteraciones el valor maximo converge a un valor, por lo que fijamos la cantidad de iteraciones en un numero similar).
 
