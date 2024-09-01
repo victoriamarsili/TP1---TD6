@@ -435,7 +435,7 @@ mejores_hiperparametros = result$Best_Par
 
 Una vez que ya determinamos la función que va a evaluar nuestro modelo y los límites por los que oscilaran nuestros híper-parámetros, podemos ejecutar la optimización.
 
-Una vez que ya obtuvimos el modelo con mejor resultado, podemos guardarnos estos en una variable para utilizarlos a futuro cuando querramos entrenar un modelo con estos híper-parámetros y evaluarlo con el test_set.
+Obtenido el mejor resultado del modelo, podemos guardarnos estos en una variable para utilizarlos a futuro cuando querramos entrenar un modelo con estos híper-parámetros y evaluarlo con el test_set.
 
 Por otro lado, graficamos la performance junto con las iteraciones de la optimización, para ver si hay algun valor donde el modelo converge.
 
@@ -446,9 +446,58 @@ graficar_performance(result_data)
 Ahora, podemos analizar como se relacionan los híper-parámetros con la performance obtenida de disintas maneras. Elegimos distintas maneras de visualizar estas relaciones.
 
 ```{r}
+# Gráfico 1: Relación entre maxdepth y AUC-ROC
+ggplot(result_data, aes(x = maxdepth, y = Value)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "loess", color = "blue") +
+  labs(title = "Relación entre maxdepth y AUC-ROC",
+       x = "maxdepth",
+       y = "AUC-ROC") +
+  theme_minimal()
 
+# Gráfico 2: Relación entre minsplit y AUC-ROC
+ggplot(result_data, aes(x = minsplit, y = Value)) +
+  geom_point(color = "red") +
+  geom_smooth(method = "loess", color = "red") +
+  labs(title = "Relación entre minsplit y AUC-ROC",
+       x = "minsplit",
+       y = "AUC-ROC") +
+  theme_minimal()
+
+# Gráfico 3: Relación entre minbucket y AUC-ROC
+ggplot(result_data, aes(x = minbucket, y = Value)) +
+  geom_point(color = "green") +
+  geom_smooth(method = "loess", color = "green") +
+  labs(title = "Relación entre minbucket y AUC-ROC",
+       x = "minbucket",
+       y = "AUC-ROC") +
+  theme_minimal()
 
 ```
+Aclaración: La banda gris en las visualizaciones representa el intervalo de confianza alrededor de la línea azul que muestra la tendencia promedio de la relación entre el hiperparámetro y el AUC-ROC.
+
+
+*Relación: max_depth y AUC-ROC*
+Observamos una relación no lineal entre max_depth y AUC-ROC. A medida que aumenta maxdepth de 0 a aproximadamente 10, el AUC-ROC también aumenta, lo que indica que el desempeño del modelo mejora hasta un maxdepth = 10 a 12, lo que sugiere que esta podría ser la configuración óptima para el hiperparámetro.
+
+Después del punto máximo, vemos una disminución en AUC-ROC a medida que maxdepth aumenta aún más. Este comportamiento podría indicar overfitting, donde el modelo se ajusta demasiado a los datos de entrenamiento y no generaliza bien en datos no vistos.
+
+A partir de maxdepth alrededor de 25, hay un ligero aumento en el AUC-ROC. Esto podría indicar que, para ciertas configuraciones de modelos o conjuntos de datos, profundidades mayores podrían tener un ligero beneficio, aunque no tan significativo como en el rango óptimo identificado anteriormente.
+
+
+*Relación: min_split y AUC-ROC*
+A medida que el valor de min_split aumenta, también lo hace el AUC-ROC, tiende a mejorar el desempeño del modelo en términos de AUC-ROC y puede tener un efecto de regularización en el modelo. Esto impide que el modelo se ajuste demasiado a los datos de entrenamiento (overfitting) al evitar divisiones en nodos que contengan muy pocas observaciones.
+
+La banda de confianza (zona sombreada alrededor de la línea azul) parece reducirse a medida que min_split aumenta, lo que indica una menor variabilidad en el rendimiento del modelo para valores más altos de min_split Indicando que el modelo es más estable y menos propenso a cambios bruscos en rendimiento.
+
+Aunque hay una mejora en AUC-ROC al incrementar min_split, esta mejora parece moderarse al acercarse a valores de min_split alrededor de 75-100, donde la curva se aplana, los beneficios adicionales de incrementar aún más min_split pueden ser marginales.
+
+
+*Relación: min_bucket y AUC-ROC*
+Establecer un min_bucket más alto generalmente mejora el rendimiento del modelo al incrementar el AUC-ROC y al reducir la variabilidad en el rendimiento, sugiriendo una mayor robustez y menor riesgo de sobreajuste. Sin embargo, el aumento en rendimiento se modera a medida que minbucket se incrementa más allá de 8 a 10, sugiriendo que puede haber un punto de rendimiento óptimo en ese rango para este hiperparámetro. 
+
+Deduciendolo del gráfico, la mejora en AUC-ROC a medida que aumenta minbucket parece ser gradual, con un aumento constante pero no dramático. 
+
 
 Ya tenemos los mejores híper-parámetros guardados en una variable, por lo que podemos entrenar un modelo con estos, calcular su performance midiendo el valor de AUC-ROC en el test_set.
  
@@ -489,21 +538,22 @@ predicciones_modelo = predict(mejor_arbol, newdata = test_set, type = "prob")[,2
 
 test_set$predicciones_optimas = predicciones_modelo
 
-curva_AUC_ROC(predicciones_modelo, test_set$popularity)
+calculo_auc_roc <- curva_AUC_ROC(predicciones_modelo, test_set$popularity)
 
-curva_optimizada = curva_AUC_ROC(predicciones_modelo, test_set$popularity)[2]
-auc_score_mejor_arbol = curva_AUC_ROC(predicciones_modelo, test_set$popularity)[1]
+curva_optimizada = calculo_auc_roc[2]
+auc_score_mejor_arbol = calculo_auc_roc[1]
+
 
 # Graficar la primera curva
-plot(curva_default, col = "lightblue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+plot(curva_default$curva_roc, col = "lightblue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
 
 # Añadir la segunda curva al mismo gráfico
-lines(curva_optimizada, col = "red", lwd = 3)
+lines(curva_optimizada$curva_roc, col = "red", lwd = 3)
 
 # Añadir una leyenda para diferenciar las curvas
 legend("bottomright", legend = c("Curva árbol básico", "Curva árbol optimizado"), col = c("lightblue", "red"), lwd = 3)
-```
 
+```
 Podemos ver una mejora en el modelo tanto visualmente en las curvas, como en los resultados del AUC-ROC, donde el primer modelo obtuve un valor AUC-ROC de tan solo 0.6225, mientras que nuestro modelo optimizado obtuvo un valor AUC-ROC de 0.6769, resultando en una mejora del 9%. 
 
 
@@ -516,9 +566,9 @@ El árbol inicial es relativamente simple y tiene pocos niveles de profundidad. 
 En cambio, el árbol final es mucho más complejo y profundo, con múltiples niveles y nodos que abarcan una gran cantidad de variables. Muestra una mayor cantidad de divisiones y considera más combinaciones de variables para hacer la clasificación. A diferencia del árbol inicial, el árbol final toma en cuenta más variables y utiliza umbrales de clasificación más detallados y específicos.
 
 Las diferencias claves entre ambos árboles son: 
-        - Complejidad: El árbol final es significativamente más complejo, con una estructura más detallada, lo que                sugiere que está ajustado para capturar más relaciones en los datos.
-        -Cantidad de Variables: El árbol final considera una mayor cantidad de variables y combinaciones en comparación           con el árbol inicial.
-        -Precisión: Es probable que el árbol final tenga un mejor rendimiento en términos de precisión debido a su                complejidad, pero esto también podría llevar a un mayor riesgo de sobreajuste si no se maneja adecuadamente.
+        - *Complejidad*: El árbol final es significativamente más complejo, con una estructura más detallada, lo que                sugiere que está ajustado para capturar más relaciones en los datos.
+        - *Cantidad de variables*: El árbol final considera una mayor cantidad de variables y combinaciones en                      comparación con el árbol inicial.
+        - *Precisión*: Es probable que el árbol final tenga un mejor rendimiento en términos de precisión debido a su               complejidad, pero esto también podría llevar a un mayor riesgo de sobreajuste si no se maneja adecuadamente.
 ```{r}
 library(corrplot)
 
@@ -687,17 +737,49 @@ predecir_y_calcular_score <- function(arbol, set_test) {
   curva_optimizada <- roc(set_test$popularity, predicciones_modelo)
   
   auc_score <- auc(curva_optimizada)
+  
   auc_score
 }
 
+# Predicciones y performance con el 20% de los datos faltantes
 
-score_modelo_20_NA <- predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
+auc_score_20_NA <- predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
 
-score_modelo_50_NA <- predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
+curva_roc_20_NA <- curva_AUC_ROC(test_20_na$predicted_class_popularity, test_20_na$popularity)
 
-score_modelo_75_NA <- predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
+# Predicciones y performance con el 50% de los datos faltantes
+
+auc_score_50_NA <- predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
+
+curva_roc_50_NA <- curva_AUC_ROC(test_50_na$predicted_class_popularity, test_50_na$popularity)
+
+# Predicciones y performance con el 75% de los datos faltantes
+
+auc_score_75_NA <- predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
+
+curva_roc_75_NA <- curva_AUC_ROC(test_75_na$predicted_class_popularity, test_75_na$popularity)
 
 ```
+
+Creamos la siguiente función para graficar y comparar curvas de ROC en los distintos modelos:
+
+```{r}
+graficar_curvas_ROC <- function(curva_1, curva_2, titulo_1, titulo_2) {
+  
+  # Graficar la primera curva
+  plot(curva_1$curva_roc, col = "blue", lwd = 3, main = "Curvas ROC", xlab = "Tasa de Falsos Positivos", ylab = "Tasa de Verdaderos Positivos")
+  
+  # Añadir la segunda curva al mismo gráfico
+  lines(curva_2$curva_roc, col = "red", lwd = 3)
+  
+  # Añadir una leyenda para diferenciar las curvas
+  legend("bottomright", legend = c(titulo_1, titulo_2), col = c("blue", "red"), lwd = 3)
+  
+  
+}
+
+```
+
 
 Ya con todos los resultados obtenidos, podemos comparar el rendimiento de nuestro mejor modelo obtenido y nuestros nuevos modelos obtenidos con datos faltantes en el dataset. Analicemos uno por uno:
 
@@ -705,7 +787,9 @@ Ya con todos los resultados obtenidos, podemos comparar el rendimiento de nuestr
 
 auc_score_mejor_arbol
 
-score_modelo_20_NA
+auc_score_20_NA
+
+graficar_curvas_ROC(curva_optimizada,curva_roc_20_NA, "Curva árbol 20 NA", "Curva árbol optimizado")
 
 ```
 
@@ -715,7 +799,9 @@ Este modelo arrojo un resultado peor al mejor árbol, pero no tan alejado de el 
 
 auc_score_mejor_arbol
 
-score_modelo_50_NA
+auc_score_50_NA
+
+graficar_curvas_ROC(curva_optimizada,curva_roc_50_NA, "Curva árbol 50 NA", "Curva árbol optimizado")
 
 ```
 
@@ -725,7 +811,9 @@ Ahora el modelo con el 50% de los datos faltantes arroja un valor AUC-ROC aún p
 
 auc_score_mejor_arbol
 
-score_modelo_75_NA
+auc_score_75_NA
+
+graficar_curvas_ROC(curva_optimizada,curva_roc_75_NA, "Curva árbol 75 NA", "Curva árbol optimizado")
 
 ```
 
@@ -754,143 +842,15 @@ score_modelo_75_NA_con_set_completo
 
 Para nuestra sorpresa, descubirmos que cuando testeamos a los modelos entrenados con datos faltantes, con un set de datos completo, el score obtenido no es tan negativo e incluso no cambia mucho entre modelos. 
 
-###***7. Análisis del impacto de los valores faltantes***
- 
- -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras.     En el primero 20%, el segundo 50% y el tercero 75%
- 
-```{r}
-# Función para reemplazar un porcentaje de valores al azar con NA
-reemplazar_con_na <- function(dataset, porcentaje) {
-  datos_na <- dataset
-  for (columna in names(datos_na)) {
-    if (is.numeric(datos_na[[columna]]))  {
-      cantidad_na <- round(porcentaje * nrow(datos_na))
-      indices <- sample(1:nrow(datos_na), cantidad_na)
-      datos_na[indices, columna] <- NA
-    }
-  }
-  return(datos_na)
-}
-
-# Creación de los tres sets
-train_20_na <- reemplazar_con_na(train_set, 0.20)
-val_20_na <- reemplazar_con_na(val_set, 0.20)
-test_20_na <- reemplazar_con_na(test_set, 0.20)
-
-train_50_na <- reemplazar_con_na(train_set, 0.50)
-val_50_na <- reemplazar_con_na(val_set, 0.50)
-test_50_na <- reemplazar_con_na(test_set, 0.50)
-
-train_75_na <- reemplazar_con_na(train_set, 0.75)
-val_75_na <- reemplazar_con_na(val_set, 0.75)
-test_75_na <- reemplazar_con_na(test_set, 0.75)
-```
- 
- -> Para cada dataset creamos un nuevo árbol optimizado (elegir hiperparam. que maximicen)
-    Comparar el mejor árbol obtenido antes, con los 3 nuevos árboles
-    
-
-```{r}
-
-# Ejecutar la optimización bayesiana
-result_20_NA <- BayesianOptimization(
-  FUN = function(maxdepth, minsplit, minbucket) {
-    evaluar_arbol(maxdepth, minsplit, minbucket, train_20_na, val_20_na)
-  },
-  bounds = limites,
-  init_points = 5,
-  n_iter = 10,
-)
-result_data_20_NA <- result_20_NA$History
-
-graficar_performance(result_data_20_NA)
-
-```
-```{r}
-# Crear el modelo utilizando los hiperparámetros especificados
-mejor_arbol_20_na <- rpart(
-  formula = popularity ~ ., 
-  data = train_20_na, 
-  method = "class", 
-  control = rpart.control(
-    maxdepth = 17, 
-    minsplit = 71, 
-    minbucket = 7,
-    cp = 0,
-    xval = 0
-  )
-)
-
-# Graficar el árbol utilizando rpart.plot
-rpart.plot(mejor_arbol_20_na, box.palette = "violet")
-print(mejor_arbol_20_na$control)
-```
-
-```{r}
-predicciones_modelo_20_na = predict(mejor_arbol_20_na, newdata = test_20_na, type = "prob")[,2]
-
-test_20_na$predicciones_optimas_20_na = predicciones_modelo_20_na
-test_20_na$predicciones_optimas_20_na <- ifelse(test_20_na$predicciones_optimas_20_na >= 0.5, 1, 0)
-test_20_na$predicciones_optimas_20_na <- as.factor(test_20_na$predicciones_optimas_20_na)
-
-curva_optimizada_20_na <- roc(test_20_na$popularity, predicciones_modelo_20_na)
-
-auc_score_mejor_arbol_20_na <- auc(curva_optimizada_20_na)
-auc_score_mejor_arbol_20_na
-```
-
-
-```{r}
-# Ejecutar la optimización bayesiana
-result_50_NA <- BayesianOptimization(
-  FUN = function(maxdepth, minsplit, minbucket) {
-    evaluar_arbol(maxdepth, minsplit, minbucket, train_50_na, val_50_na)
-  },
-  bounds = limites,
-  init_points = 5,
-  n_iter = 10,
-)
-
-result_data_50_NA <- result_50_NA$History
-
-graficar_performance(result_data_50_NA)
-
-```
-
-
-```{r}
-# Ejecutar la optimización bayesiana
-result_75_NA <- BayesianOptimization(
-  FUN = function(maxdepth, minsplit, minbucket) {
-    evaluar_arbol(maxdepth, minsplit, minbucket, train_75_na, val_75_na)
-  },
-  bounds = limites,
-  init_points = 5,
-  n_iter = 10,
-)
-
-result_data_75_NA <- result_75_NA$History
-
-graficar_performance(result_data_75_NA)
-
-```
-
-    
-  -> Analizar como cambia el rendimiento del modelo a medida que aumenta la cantidad de NAs (Recomiendan fuertemente usar gráficos)
-  
-  [ACA]
 
 ###***8. Conclusiones y discusión***
+Luego de entrenar el modelo optimizado, logramos predecir si una canción será popular (según el umbral definido por nosotros) utilizando únicamente las características disponibles en el dataset de Spotify. Aunque el modelo alcanzó un nivel de precisión de 0.837, los resultados no fueron tan satisfactorios como esperábamos. 
 
-  -> Resumir los hallazgos principales del análisis.
-  
-  [ACA]
-  
-  -> Reflexionar sobre la efectividad del árbol de decisión para el problema planteado.
-  
-  [ACA]
-  
-  -> Sugerir posibles mejoras o direcciones futuras para el análisis.
-  
-  [ACA]
+Al mejorar el modelo mediante la optimización de los hiperparámetros, logramos incrementar el área bajo la curva AUC-ROC en aproximadamente un 9%. Esto se consiguió a través de una optimización bayesiana con 1000 iteraciones.
+
+En cuanto a la efectividad del árbol de decisión para este problema, esperábamos un rendimiento superior. Después de numerosos intentos de mejora, concluimos que la popularidad de una canción no parece estar fuertemente correlacionada con las variables presentes en el dataset. Además, es posible que el enfoque basado en modelos de árboles de decisión no sea el más adecuado para este tipo de datos.  
+
+Por lo tanto, sugerimos explorar otros tipos de modelos, como regresión logística, máquinas de vectores de soporte (SVM)
+o redes neuronales, que podrían ofrecer un mejor rendimiento en la predicción de la popularidad de canciones, dadas las
+características del dataset. Este cambio de enfoque podría mejorar considerablemente la precisión y la utilidad del modelo.
 
