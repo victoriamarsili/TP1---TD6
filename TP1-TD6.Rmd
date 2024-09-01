@@ -70,7 +70,7 @@ También nos gustaría explicar cual es la diferencia entre instrumentalness y s
 Instrumentalness: Se centra en la ausencia de cualquier tipo de contenido vocal, incluyendo tanto palabras habladas como cantadas. Una pista con alta instrumentalness puede incluir sonidos no verbales como “ooh” y “aah”, pero no letras cantadas o habladas.
 Speechiness: Se enfoca específicamente en la presencia de palabras habladas, no en el canto. Una pista con alta speechiness incluye predominantemente palabras habladas, como en un discurso o una narración.
 
-Nos preguntamos si existe algún tipo de correlación negativa entre estas variables y es por ello que realizamos la siguiente visualización:
+Nos preguntamos si existe algún tipo de correlación negativa entre estas variables y es por ello que realizamos la  visualización a continuación. Primero comenzamos por cargar los datos y evaluar si existen valores NA, solamente para estar al tanto, los árboles saben manejar este tipo de información de igual manera. 
 
 ```{r}
 library(readr)
@@ -147,7 +147,7 @@ datos$popularity <- ifelse(datos$popularity >= 34, 1, 0)
 # Obtenemos el total de filas que tiene nuestro dataset (50000)
 n <- nrow(datos)
 
-# Elegimos de manera aleatoria los indices de la muestra, asignando el 70% de los indices a los datos de entrenamiento, el 15% a datos de validación y 15% a datos de testeo
+# Elegimos de manera aleatoria los indices de la datos, asignando el 70% de los indices a los datos de entrenamiento, el 15% a datos de validación y 15% a datos de testeo
 
 train_indices <- sample(1:n, size = 0.7 * n)
 remaining_indices <- setdiff(1:n, train_indices)
@@ -336,7 +336,7 @@ f1_score <- matriz_de_confusion$byClass['F1']
 print(f1_score)
 ```
 
-Un valor de F1 Score de 0.58 (o 58%) indica el equilibrio entre la precisión y el recall del modelo. En este caso, un valor de 0.58 sugiere que el modelo tiene un rendimiento moderado en términos de equilibrio entre evitar falsos positivos (precisión) y detectar verdaderos positivos (recall). Un F1 Score de 0.58 muestra que el modelo tiene margen de mejora para aumentar tanto la precisión como el recall, y así lograr un mejor rendimiento general.
+Un valor de F1 Score de 0.58 (o 58%) indica el equilibrio entre la precisión y el recall del modelo. En este caso, un valor de 0.58 sugiere que el modelo tiene un rendimiento moderado en términos de equilibrio entre evitar falsos positivos (precisión) y detectar verdaderos positivos (recall). Un F1 Score de 0.58 datos que el modelo tiene margen de mejora para aumentar tanto la precisión como el recall, y así lograr un mejor rendimiento general.
 
 
 ##*AUC-ROC*
@@ -511,15 +511,23 @@ Podemos ver una mejora en el modelo tanto visualmente en las curvas, como en los
  
  -> Presentar el árbol final, y detallar las diferencias entre el primero y el último
  
+El árbol inicial es relativamente simple y tiene pocos niveles de profundidad. Habíamos observado que la primera división se realiza en la variable *instrumentalness* con un umbral de 0.0033.Posteriormente, se divide en *speechiness* y luego en *energy* y *acousticness.* Este árbol se enfoca principalmente en variables como instrumentalness, speechiness, energy, y acousticness para clasificar la popularidad.
+
+En cambio, el árbol final es mucho más complejo y profundo, con múltiples niveles y nodos que abarcan una gran cantidad de variables. Muestra una mayor cantidad de divisiones y considera más combinaciones de variables para hacer la clasificación. A diferencia del árbol inicial, el árbol final toma en cuenta más variables y utiliza umbrales de clasificación más detallados y específicos.
+
+Las diferencias claves entre ambos árboles son: 
+        - Complejidad: El árbol final es significativamente más complejo, con una estructura más detallada, lo que                sugiere que está ajustado para capturar más relaciones en los datos.
+        -Cantidad de Variables: El árbol final considera una mayor cantidad de variables y combinaciones en comparación           con el árbol inicial.
+        -Precisión: Es probable que el árbol final tenga un mejor rendimiento en términos de precisión debido a su                complejidad, pero esto también podría llevar a un mayor riesgo de sobreajuste si no se maneja adecuadamente.
 ```{r}
 library(corrplot)
 
-muestra_numerica <- muestra
-muestra_numerica$popularity <- as.numeric(as.character(muestra_numerica$popularity))
+datos_numerica <- datos
+datos_numerica$popularity <- as.numeric(as.character(datos_numerica$popularity))
 
   
 
-numeric_data <- muestra_numerica[, c('popularity', 'duration_min', 'explicit', 'danceability', 
+numeric_data <- datos_numerica[, c('popularity', 'duration_min', 'explicit', 'danceability', 
                                   'energy', 'key', 'loudness', 'mode', 
                                   'speechiness', 'acousticness', 
                                   'instrumentalness', 'liveness', 
@@ -539,11 +547,213 @@ corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black",
          tl.cex = 0.8, title = "Matriz de Correlación", mar = c(0,0,1,0), col = color_pal)
 
 ```
+De acuerdo con el árbol final y la matriz de correlación, las variables más importantes son:
 
- -> Identificar y discutir las variables más importantes según nuestro mejor árbol
+    -*instrumentalness*: Esta variable fue la primera en dividir el árbol inicial y también aparece en el árbol final,        lo que sugiere que es una de las variables más influyentes en la clasificación de la popularidad. La correlación        negativa con la popularidad (-0.1507) indica que a medida que aumenta la instrumentalness, la popularidad tiende a       disminuir.
+    
+    -*speechiness*: También es una variable clave que se utiliza en las primeras divisiones del árbol inicial. Aunque         tiene una correlación negativa débil con la popularidad (-0.1036), su importancia en la estructura del árbol            indica que es relevante para la clasificación.
+    
+    -*energy*: Aparece tanto en el árbol inicial como en el final. Tiene una correlación cercana a cero con la                popularidad (-0.0301), pero su aparición en el árbol sugiere que, en combinación con otras variables, juega un          papel en la predicción.
+    
+    -*acousticness*: Se encuentra en ambos árboles, y su correlación negativa con la popularidad (-0.0035) es baja, pero        puede ser un factor determinante cuando se combina con otras variables en el árbol.
+    
+
+###***7. Análisis del impacto de los valores faltantes***
  
- [ACA]
+En esta sección, queremos evaluar como impacta la cantidad de datos faltantes al entrenamiento y performance de nuestro modelo. 
+
+Para ello, nos creamos 9 datasets nuevos, cada uno con una cantidad distinta de datos faltantes (20%, 50% y 75%), donde crearemos modelos para cada uno y luego usaremos los datasets de entrenamiento, también con datos faltantes, para medir su performance
  
+```{r}
+# Función para reemplazar cierto porcentaje de valores al azar con NA
+reemplazar_con_na <- function(dataset, porcentaje) {
+  datos_na <- dataset
+  for (columna in names(datos_na)) {
+    if (is.numeric(datos_na[[columna]]))  {
+      cantidad_na <- round(porcentaje * nrow(datos_na))
+      indices <- sample(1:nrow(datos_na), cantidad_na)
+      datos_na[indices, columna] <- NA
+    }
+  }
+  return(datos_na)
+}
+```
+
+
+```{r}
+# Creación de los nueve datasets
+train_20_na <- reemplazar_con_na(train_set, 0.20)
+val_20_na <- reemplazar_con_na(val_set, 0.20)
+test_20_na <- reemplazar_con_na(test_set, 0.20)
+
+train_50_na <- reemplazar_con_na(train_set, 0.50)
+val_50_na <- reemplazar_con_na(val_set, 0.50)
+test_50_na <- reemplazar_con_na(test_set, 0.50)
+
+train_75_na <- reemplazar_con_na(train_set, 0.75)
+val_75_na <- reemplazar_con_na(val_set, 0.75)
+test_75_na <- reemplazar_con_na(test_set, 0.75)
+```
+ 
+Ahora vamos a entrenar 3 modelos nuevos, cada uno con su correspondiente cantidad faltante de datos. Reutilizamos el código ya creado en el ejercicio 5 para simplificar el código. Pero primero tenemos que encontrar los híper-parámetros que mejor performance dan en el dataset de validación.
+
+
+```{r}
+optimizar_arbol <- function(set_entrenamiento, set_validacion, init_iter, normal_iter) {
+  arbol_optimizado <- BayesianOptimization(
+  FUN = function(maxdepth, minsplit, minbucket) {
+    evaluar_arbol(maxdepth, minsplit, minbucket, train_set, val_set)
+  },
+  bounds = limites, 
+  init_points = init_iter, # Número de iteraciones aleatorias que hará el modelo
+  n_iter = normal_iter, # Número de variables de mejora que hará el modelo
+)
+  
+  arbol_optimizado
+}
+
+crear_arbol <- function(depth, split, bucket){
+  nuevo_arbol <- rpart(
+  formula = popularity ~ ., 
+  data = train_20_na, 
+  method = "class", 
+  control = rpart.control(
+    maxdepth = depth, 
+    minsplit = split, 
+    minbucket = bucket,
+    cp = 0,
+    xval = 0
+  )
+)
+  
+  nuevo_arbol
+}
+```
+
+```{r}
+
+# Buscamos híper-parámetros óptimos para:
+
+# 20% de los datos faltantes
+
+result_20_NA <- optimizar_arbol(train_20_na,val_20_na, 30,15)
+
+result_data_20_NA <- result_20_NA$History
+
+best_hiper_20 <- result_20_NA$Best_Par
+
+# 50% de los datos faltantes
+
+result_50_NA <- optimizar_arbol(train_50_na,val_50_na, 30,15)
+
+result_data_50_NA <- result_50_NA$History
+
+best_hiper_50 <- result_50_NA$Best_Par
+
+# 75% de lo datos faltantes
+
+result_75_NA <- optimizar_arbol(train_75_na,val_75_na, 30,15)
+
+result_data_75_NA <- result_75_NA$History
+
+best_hiper_75 <- result_75_NA$Best_Par
+
+```
+
+Ya con los híper-parámetros correspondientes, podemos entrenar nuestros nuevos modelos.
+
+```{r}
+# Ahora creamsos los 3 modelos utilizando los híper-parámetros encontrados
+
+mejor_arbol_20_na <- crear_arbol(best_hiper_20[1],best_hiper_20[2],best_hiper_20[3])
+
+mejor_arbol_50_na <- crear_arbol(best_hiper_50[1],best_hiper_50[2],best_hiper_50[3])
+
+mejor_arbol_75_na <- crear_arbol(best_hiper_75[1],best_hiper_75[2],best_hiper_75[3])
+
+```
+
+Luego de crear nuestros modelos óptimos, queremos predecir y medir el valor de AUC-ROC de cada uno de los modelos con su respectivo % de datos faltantes.
+
+```{r}
+
+predecir_y_calcular_score <- function(arbol, set_test) {
+  predicciones_modelo <- predict(arbol, newdata = set_test, type = "prob")[,2]
+  
+  set_test$predicciones_optimas = predicciones_modelo
+  set_test$predicciones_optimas <- ifelse(test_20_na$predicciones_optimas >= 0.5, 1, 0)
+  set_test$predicciones_optimas <- as.factor(test_20_na$predicciones_optimas)
+  
+  curva_optimizada <- roc(set_test$popularity, predicciones_modelo)
+  
+  auc_score <- auc(curva_optimizada)
+  auc_score
+}
+
+
+score_modelo_20_NA <- predecir_y_calcular_score(mejor_arbol_20_na,test_20_na)
+
+score_modelo_50_NA <- predecir_y_calcular_score(mejor_arbol_50_na,test_50_na)
+
+score_modelo_75_NA <- predecir_y_calcular_score(mejor_arbol_75_na,test_75_na)
+
+```
+
+Ya con todos los resultados obtenidos, podemos comparar el rendimiento de nuestro mejor modelo obtenido y nuestros nuevos modelos obtenidos con datos faltantes en el dataset. Analicemos uno por uno:
+
+```{r}
+
+auc_score_mejor_arbol
+
+score_modelo_20_NA
+
+```
+
+Este modelo arrojo un resultado peor al mejor árbol, pero no tan alejado de el mismo, sin embargo, esto tiene sentido, ya que únicamente faltan el 20% de los datos con los que se entreno, valido y testeo el modelo inicial. Con el modelo original obtuvimos un valor AUC-ROC de 0.68, mientras que con el 20% de los datos faltantes obtuvimos uno de 0.646.
+
+```{r}
+
+auc_score_mejor_arbol
+
+score_modelo_50_NA
+
+```
+
+Ahora el modelo con el 50% de los datos faltantes arroja un valor AUC-ROC aún peor que el anterior, de tan solo 0.608, no es extremadamente malo, pero ya no es tan efectivo como quizas el anterior. Tiene sentido este resultado, porque ahora el modelo se entrenó y validó con un 50% de datos menos que el mejor modelo.
+
+```{r}
+
+auc_score_mejor_arbol
+
+score_modelo_75_NA
+
+```
+
+Por último el modelo con el 75% de los datos faltantes. Es congruente que haya arrojado un valor inferior (de 0.57) al de 20% y 50% de datos faltantes, ya que en esta instancia el modelo se entrenó y validó con 1/4 del total de los datos que lo hizo el mejor modelo obtenido.
+
+Vemos que hay una clara correlacion negativa entre performance y cantidad de datos que utiliza el modelo para entrenar, validar y testear. A medida que aumenta la cantidad de información faltante, disminuye la performance del modelo. 
+
+Quisimos llevar mas allá la investigación con los datos faltantes, por lo que analizamos que parte de los datos faltantes hacían que el modelo arroje peores resultados. Por lo que tomamos los modelos pre entrenados con datos faltantes y los testeamos con el data set completo: 
+
+```{r}
+
+auc_score_mejor_arbol
+
+score_modelo_20_NA_con_set_completo <- predecir_y_calcular_score(mejor_arbol_20_na,test_set)
+
+score_modelo_50_NA_con_set_completo <- predecir_y_calcular_score(mejor_arbol_50_na,test_set)
+
+score_modelo_75_NA_con_set_completo <- predecir_y_calcular_score(mejor_arbol_75_na,test_set)
+
+score_modelo_20_NA_con_set_completo
+
+score_modelo_50_NA_con_set_completo
+
+score_modelo_75_NA_con_set_completo
+```
+
+Para nuestra sorpresa, descubirmos que cuando testeamos a los modelos entrenados con datos faltantes, con un set de datos completo, el score obtenido no es tan negativo e incluso no cambia mucho entre modelos. 
+
 ###***7. Análisis del impacto de los valores faltantes***
  
  -> Tenemos que generar 3 datasets, en cada uno falta un % de los datos de las predictoras.     En el primero 20%, el segundo 50% y el tercero 75%
